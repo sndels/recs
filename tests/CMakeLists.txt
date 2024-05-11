@@ -1,0 +1,4 @@
+set(TESTS_SOURCES
+    ${CMAKE_CURRENT_LIST_DIR}/access.cpp
+    PARENT_SCOPE
+)
