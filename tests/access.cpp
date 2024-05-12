@@ -1,3 +1,5 @@
+#include <catch2/catch_test_macros.hpp>
+
 #include <recs/access.hpp>
 
 namespace
@@ -58,25 +60,112 @@ static_assert(
     !recs::WithAccessesType<TransformComponent, HealthComponent>::contains<
         CharacterComponent>());
 
-// This just needs to compile
-void entity_type_safety(DamagedCharacterEntity dmg)
+TEST_CASE("Entity")
 {
+    recs::ComponentStorage cs;
+
+    recs::EntityId const e0 = cs.addEntity();
+    cs.addComponent(
+        e0, TransformComponent{
+                .trfn = {1.f, 2.f, 3.f},
+            });
+    cs.addComponent(
+        e0, HealthComponent{
+                .health = 99.f,
+            });
+    cs.addComponent(e0, CharacterComponent{});
+
+    DamagedCharacterEntity dmg(cs, e0);
     TransformComponent const &trfn = dmg.getComponent<TransformComponent>();
-    (void)trfn;
+    REQUIRE(trfn.trfn[0] == 1.f);
+    REQUIRE(trfn.trfn[1] == 2.f);
+    REQUIRE(trfn.trfn[2] == 3.f);
     HealthComponent const &h = dmg.getComponent<HealthComponent>();
-    (void)h;
+    REQUIRE(h.health == 99.f);
 }
 
-// This just needs to compile
-void query_type_safety(DamageSourceQuery dmg)
+TEST_CASE("Query")
 {
-    for (auto &entity : dmg)
+    recs::ComponentStorage cs;
+
+    recs::EntityId const e0 = cs.addEntity();
+    cs.addComponent(
+        e0, TransformComponent{
+                .trfn = {1.f, 2.f, 3.f},
+            });
+    cs.addComponent(
+        e0, DamageSourceComponent{
+                .damageOverTime = 99.f,
+            });
+
+    recs::EntityId const e1 = cs.addEntity();
+    cs.addComponent(
+        e1, TransformComponent{
+                .trfn = {10.f, 20.f, 30.f},
+            });
+    cs.addComponent(
+        e1, DamageSourceComponent{
+                .damageOverTime = 9900.f,
+            });
+
+    recs::EntityId const e2 = cs.addEntity();
+    cs.addComponent(
+        e2, TransformComponent{
+                .trfn = {100.f, 200.f, 300.f},
+            });
+    cs.addComponent(
+        e2, DamageSourceComponent{
+                .damageOverTime = 990000.f,
+            });
+
+    DamageSourceQuery q{cs, {e0, e1, e2}};
+    {
+        DamageSourceQuery::Iterator iter = q.begin();
+        DamageSourceQuery::Iterator const begin_iter = iter;
+        REQUIRE(iter != q.end());
+        REQUIRE(iter->getComponent<TransformComponent>().trfn[0] == 1.f);
+        REQUIRE(iter->getComponent<TransformComponent>().trfn[1] == 2.f);
+        REQUIRE(iter->getComponent<TransformComponent>().trfn[2] == 3.f);
+        REQUIRE(
+            iter->getComponent<DamageSourceComponent>().damageOverTime == 99.f);
+        {
+            DamageSourceQuery::Iterator const tmp_iter = iter++;
+            REQUIRE(tmp_iter == begin_iter);
+        }
+        REQUIRE(iter != q.end());
+        REQUIRE(iter->getComponent<TransformComponent>().trfn[0] == 10.f);
+        REQUIRE(iter->getComponent<TransformComponent>().trfn[1] == 20.f);
+        REQUIRE(iter->getComponent<TransformComponent>().trfn[2] == 30.f);
+        REQUIRE(
+            iter->getComponent<DamageSourceComponent>().damageOverTime ==
+            9900.f);
+        {
+            DamageSourceQuery::Iterator const tmp_iter = ++iter;
+            REQUIRE(tmp_iter == iter);
+        }
+        REQUIRE(iter != q.end());
+        REQUIRE(iter->getComponent<TransformComponent>().trfn[0] == 100.f);
+        REQUIRE(iter->getComponent<TransformComponent>().trfn[1] == 200.f);
+        REQUIRE(iter->getComponent<TransformComponent>().trfn[2] == 300.f);
+        REQUIRE(
+            iter->getComponent<DamageSourceComponent>().damageOverTime ==
+            990000.f);
+    }
+    TransformComponent trfn_sum;
+    DamageSourceComponent dmg_sum;
+    for (auto &entity : q)
     {
         TransformComponent const &trfn =
             entity.getComponent<TransformComponent>();
-        (void)trfn;
+        trfn_sum.trfn[0] += trfn.trfn[0];
+        trfn_sum.trfn[1] += trfn.trfn[1];
+        trfn_sum.trfn[2] += trfn.trfn[2];
         DamageSourceComponent const &dmg =
             entity.getComponent<DamageSourceComponent>();
-        (void)dmg;
+        dmg_sum.damageOverTime += dmg.damageOverTime;
     }
+    REQUIRE(trfn_sum.trfn[0] == 111.f);
+    REQUIRE(trfn_sum.trfn[1] == 222.f);
+    REQUIRE(trfn_sum.trfn[2] == 333.f);
+    REQUIRE(dmg_sum.damageOverTime == 999999.f);
 }

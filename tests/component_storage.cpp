@@ -33,6 +33,8 @@ TEST_CASE("ComponentStorage")
 
     ecs.addComponent(e0, DataF{1.f});
     REQUIRE(ecs.hasComponent<DataF>(e0));
+    // Should be able to check for a type that no entity has ever had
+    REQUIRE(!ecs.hasComponent<int>(e0));
     ecs.addComponent(e1, DataF{2.f});
     REQUIRE(ecs.hasComponent<DataF>(e1));
     ecs.addComponent(e0, DataI{3});
