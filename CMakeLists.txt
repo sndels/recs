@@ -2,11 +2,15 @@ cmake_minimum_required(VERSION 3.20)
 project(recs)
 
 add_subdirectory(ext)
+add_subdirectory(src)
 
-add_library(recs INTERFACE)
+add_library(recs STATIC ${RECS_SOURCES})
+target_compile_features(recs
+    PUBLIC
+    cxx_std_20
+)
 
-target_include_directories(recs
-    INTERFACE
+target_include_directories(recs PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
