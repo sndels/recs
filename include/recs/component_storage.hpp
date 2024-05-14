@@ -50,6 +50,13 @@ class ComponentStorage
     void removeComponent(EntityId id);
 
   private:
+    // Helper for typeId(), wrapping a thread-safe counter
+    uint64_t runningTypeId() const;
+    // Returns a unique, thread-safe, constant id for the type. The ids can only
+    // be depended on within the process they were queried in so they should not
+    // be serialized.
+    template <typename T> uint64_t typeId() const;
+
     // TODO:
     // Not a linear array because content might be sparse. Still, this should be
     // some kind of sparse block allocated thing instead of a hashmap of
@@ -60,11 +67,8 @@ class ComponentStorage
     // interesting subsets of components will be scattered around arbitrarily.
     // How should grouping be implemented?
     using ComponentMap = std::unordered_map<uint64_t, void *>;
-    // TODO:
-    // This could be a vector if the component types had a unique indices
-    // starting from 0. Could implemented with some kind of static function with
-    // a static counter?
-    std::unordered_map<std::type_index, ComponentMap> m_component_maps;
+
+    std::vector<ComponentMap> m_component_maps;
     std::vector<uint16_t> m_entity_generations;
     std::deque<uint64_t> m_entity_freelist;
 };
@@ -75,9 +79,10 @@ void ComponentStorage::addComponent(EntityId id, T const &c)
 {
     assert(isValid(id));
 
-    std::type_index const type_index = std::type_index(typeid(T));
-    // [] because we do want to insert an empty map if there is none
-    ComponentMap &map = m_component_maps[type_index];
+    uint64_t const type_id = typeId<T>();
+    if (m_component_maps.size() <= type_id)
+        m_component_maps.resize(type_id + 1);
+    ComponentMap &map = m_component_maps[type_id];
 
     uint64_t const index = id.index();
     assert(!map.contains(index) && "The entity already has this component");
@@ -95,11 +100,11 @@ ComponentStorage::hasComponent(EntityId id) const
 {
     assert(isValid(id));
 
-    std::type_index const type_index = std::type_index(typeid(T));
-    if (!m_component_maps.contains(type_index))
+    uint64_t const type_id = typeId<T>();
+    if (m_component_maps.size() <= type_id)
         return false;
 
-    ComponentMap const &map = m_component_maps.at(type_index);
+    ComponentMap const &map = m_component_maps.at(type_id);
 
     uint64_t const index = id.index();
     return map.contains(index);
@@ -118,8 +123,9 @@ T &ComponentStorage::getComponent(EntityId id) const
 {
     assert(isValid(id));
 
-    std::type_index const type_index = std::type_index(typeid(T));
-    ComponentMap const &map = m_component_maps.at(type_index);
+    uint64_t const type_id = typeId<T>();
+    assert(type_id < m_component_maps.size());
+    ComponentMap const &map = m_component_maps[type_id];
 
     uint64_t const index = id.index();
     T *ptr = (T *)map.at(index);
@@ -134,8 +140,9 @@ void ComponentStorage::removeComponent(EntityId id)
 {
     assert(isValid(id));
 
-    std::type_index const type_index = std::type_index(typeid(T));
-    ComponentMap &map = m_component_maps[type_index];
+    uint64_t const type_id = typeId<T>();
+    assert(type_id < m_component_maps.size());
+    ComponentMap &map = m_component_maps[type_id];
 
     uint64_t const index = id.index();
     T *ptr = (T *)map.at(index);
@@ -143,6 +150,15 @@ void ComponentStorage::removeComponent(EntityId id)
 
     std::free(ptr);
     map.erase(index);
+}
+
+template <typename T> uint64_t ComponentStorage::typeId() const
+{
+    // Static init is required to be thread safe. runningTypeId is thread safe
+    // in case multiple threads are initializing ids for different component
+    // types.
+    static uint64_t id = runningTypeId();
+    return id;
 }
 
 } // namespace recs

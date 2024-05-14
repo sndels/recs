@@ -1,14 +1,16 @@
 #include "recs/component_storage.hpp"
 
+#include <atomic>
+
 namespace recs
 {
 
 ComponentStorage::~ComponentStorage()
 {
-    for (auto &cm : m_component_maps)
+    for (ComponentMap &cm : m_component_maps)
     {
-        for (auto &c : cm.second)
-            std::free(c.second);
+        for (auto &[id, component] : cm)
+            std::free(component);
     }
 }
 
@@ -66,18 +68,29 @@ void ComponentStorage::removeEntity(EntityId id)
     // TODO:
     // There should probably be a bitmask or something so we don't have to probe
     // lots of component types the entity doesn't even have.
-    for (auto &cs : m_component_maps)
+    for (ComponentMap &cs : m_component_maps)
     {
-        if (cs.second.contains(index))
+        if (cs.contains(index))
         {
-            void *ptr = cs.second.at(index);
+            void *ptr = cs.at(index);
             std::free(ptr);
-            cs.second.erase(index);
+            cs.erase(index);
         }
     }
 
     if (stored_generation <= EntityId::s_max_generation)
         m_entity_freelist.push_back(index);
+}
+
+uint64_t ComponentStorage::runningTypeId() const
+{
+    // TODO:
+    // This should be ok even if used in a DLL but potentially not if the DLL is
+    // shared between processes?
+    static std::atomic<uint64_t> id = 0;
+    // Static init is thread safe but multiple threads might be initializing
+    // type ids for different types.
+    return id.fetch_add(1);
 }
 
 } // namespace recs
