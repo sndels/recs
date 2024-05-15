@@ -2,6 +2,7 @@
 
 #include "concepts.hpp"
 #include "entity_id.hpp"
+#include <bitset>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -71,6 +72,11 @@ class ComponentStorage
     std::vector<ComponentMap> m_component_maps;
     std::vector<uint16_t> m_entity_generations;
     std::deque<uint64_t> m_entity_freelist;
+
+    // Use a reasonably large bitset to see the perf implications of this design
+    static size_t const s_max_component_type_count = 1024;
+    using ComponentMask = std::bitset<s_max_component_type_count>;
+    std::vector<ComponentMask> m_entity_component_masks;
 };
 
 template <typename T>
@@ -92,6 +98,11 @@ void ComponentStorage::addComponent(EntityId id, T const &c)
     std::memcpy(ptr, &c, sizeof(T));
 
     map.emplace(index, ptr);
+
+    assert(m_entity_component_masks.size() > index);
+    ComponentMask &mask = m_entity_component_masks[index];
+    assert(!mask.test(type_id));
+    mask.set(type_id);
 }
 
 template <typename T>
@@ -100,14 +111,12 @@ ComponentStorage::hasComponent(EntityId id) const
 {
     assert(isValid(id));
 
-    uint64_t const type_id = typeId<T>();
-    if (m_component_maps.size() <= type_id)
-        return false;
-
-    ComponentMap const &map = m_component_maps.at(type_id);
-
     uint64_t const index = id.index();
-    return map.contains(index);
+    assert(m_entity_component_masks.size() > index);
+    ComponentMask const &mask = m_entity_component_masks[index];
+
+    uint64_t const type_id = typeId<T>();
+    return mask.test(type_id);
 }
 
 template <typename... Ts>
@@ -150,6 +159,11 @@ void ComponentStorage::removeComponent(EntityId id)
 
     std::free(ptr);
     map.erase(index);
+
+    assert(m_entity_component_masks.size() > index);
+    ComponentMask &mask = m_entity_component_masks[index];
+    assert(mask.test(type_id));
+    mask.reset(type_id);
 }
 
 template <typename T> uint64_t ComponentStorage::typeId() const

@@ -23,6 +23,7 @@ EntityId ComponentStorage::addEntity()
         assert(m_entity_generations.size() <= EntityId::s_max_index);
         index = (uint64_t)m_entity_generations.size();
         m_entity_generations.push_back(0);
+        m_entity_component_masks.emplace_back();
         generation = 0;
     }
     else
@@ -65,18 +66,21 @@ void ComponentStorage::removeEntity(EntityId id)
     uint16_t &stored_generation = m_entity_generations[index];
     stored_generation++;
 
-    // TODO:
-    // There should probably be a bitmask or something so we don't have to probe
-    // lots of component types the entity doesn't even have.
-    for (ComponentMap &cs : m_component_maps)
+    ComponentMask &mask = m_entity_component_masks[index];
+    const size_t mask_bit_count = mask.size();
+    for (size_t i = 0; i < mask_bit_count; ++i)
     {
-        if (cs.contains(index))
+        if (mask[i])
         {
+            ComponentMap &cs = m_component_maps[i];
+
             void *ptr = cs.at(index);
             std::free(ptr);
             cs.erase(index);
         }
     }
+
+    mask.reset();
 
     if (stored_generation <= EntityId::s_max_generation)
         m_entity_freelist.push_back(index);
@@ -90,7 +94,9 @@ uint64_t ComponentStorage::runningTypeId() const
     static std::atomic<uint64_t> id = 0;
     // Static init is thread safe but multiple threads might be initializing
     // type ids for different types.
-    return id.fetch_add(1);
+    uint64_t ret = id.fetch_add(1);
+    assert(ret <= s_max_component_type_count);
+    return ret;
 }
 
 } // namespace recs
