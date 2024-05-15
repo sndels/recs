@@ -2,6 +2,7 @@
 
 #include "concepts.hpp"
 #include "entity_id.hpp"
+#include "type_id.hpp"
 #include <bitset>
 #include <cstdint>
 #include <cstdlib>
@@ -51,13 +52,6 @@ class ComponentStorage
     void removeComponent(EntityId id);
 
   private:
-    // Helper for typeId(), wrapping a thread-safe counter
-    uint64_t runningTypeId() const;
-    // Returns a unique, thread-safe, constant id for the type. The ids can only
-    // be depended on within the process they were queried in so they should not
-    // be serialized.
-    template <typename T> uint64_t typeId() const;
-
     // TODO:
     // Not a linear array because content might be sparse. Still, this should be
     // some kind of sparse block allocated thing instead of a hashmap of
@@ -73,9 +67,6 @@ class ComponentStorage
     std::vector<uint16_t> m_entity_generations;
     std::deque<uint64_t> m_entity_freelist;
 
-    // Use a reasonably large bitset to see the perf implications of this design
-    static size_t const s_max_component_type_count = 1024;
-    using ComponentMask = std::bitset<s_max_component_type_count>;
     std::vector<ComponentMask> m_entity_component_masks;
 };
 
@@ -85,7 +76,7 @@ void ComponentStorage::addComponent(EntityId id, T const &c)
 {
     assert(isValid(id));
 
-    uint64_t const type_id = typeId<T>();
+    uint64_t const type_id = TypeId::get<T>();
     if (m_component_maps.size() <= type_id)
         m_component_maps.resize(type_id + 1);
     ComponentMap &map = m_component_maps[type_id];
@@ -115,7 +106,7 @@ ComponentStorage::hasComponent(EntityId id) const
     assert(m_entity_component_masks.size() > index);
     ComponentMask const &mask = m_entity_component_masks[index];
 
-    uint64_t const type_id = typeId<T>();
+    uint64_t const type_id = TypeId::get<T>();
     return mask.test(type_id);
 }
 
@@ -132,7 +123,7 @@ T &ComponentStorage::getComponent(EntityId id) const
 {
     assert(isValid(id));
 
-    uint64_t const type_id = typeId<T>();
+    uint64_t const type_id = TypeId::get<T>();
     assert(type_id < m_component_maps.size());
     ComponentMap const &map = m_component_maps[type_id];
 
@@ -149,7 +140,7 @@ void ComponentStorage::removeComponent(EntityId id)
 {
     assert(isValid(id));
 
-    uint64_t const type_id = typeId<T>();
+    uint64_t const type_id = TypeId::get<T>();
     assert(type_id < m_component_maps.size());
     ComponentMap &map = m_component_maps[type_id];
 
@@ -164,15 +155,6 @@ void ComponentStorage::removeComponent(EntityId id)
     ComponentMask &mask = m_entity_component_masks[index];
     assert(mask.test(type_id));
     mask.reset(type_id);
-}
-
-template <typename T> uint64_t ComponentStorage::typeId() const
-{
-    // Static init is required to be thread safe. runningTypeId is thread safe
-    // in case multiple threads are initializing ids for different component
-    // types.
-    static uint64_t id = runningTypeId();
-    return id;
 }
 
 } // namespace recs
