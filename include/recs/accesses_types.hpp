@@ -1,6 +1,7 @@
 #pragma once
 
 #include "concepts.hpp"
+#include "type_id.hpp"
 
 namespace recs
 {
@@ -11,6 +12,7 @@ template <> class AccessesType<>
 {
   public:
     template <typename T> static consteval bool contains() { return false; }
+    static void setMask(ComponentMask &) { }
 };
 template <typename... Ts> class AccessesType
 {
@@ -23,6 +25,11 @@ template <typename... Ts> class AccessesType
     }
 
     template <typename T> static consteval bool contains() { return false; }
+
+    static void setMask(ComponentMask &mask)
+    {
+        (void(mask.set(TypeId::get<Ts>())), ...);
+    }
 };
 
 template <typename... Ts> class ReadAccessesType : public AccessesType<Ts...>

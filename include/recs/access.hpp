@@ -2,6 +2,7 @@
 
 #include "accesses_types.hpp"
 #include "component_storage.hpp"
+#include "type_id.hpp"
 #include <cstdint>
 
 namespace recs
@@ -24,6 +25,26 @@ class Entity
     template <typename T>
         requires(Contains<WriteAccesses, T>)
     [[nodiscard]] T &getComponent() const;
+
+    [[nodiscard]] static ComponentMask accessMask()
+    {
+        ComponentMask mask;
+
+        ReadAccesses::setMask(mask);
+        WriteAccesses::setMask(mask);
+        WithAccesses::setMask(mask);
+
+        return mask;
+    }
+
+    [[nodiscard]] static ComponentMask writeAccessMask()
+    {
+        ComponentMask mask;
+
+        WriteAccesses::setMask(mask);
+
+        return mask;
+    }
 
     // TODO:
     // Support structured bindings into components?
@@ -72,6 +93,26 @@ class Query
 
     Iterator begin() const { return Iterator(*this, 0); }
     Iterator end() const { return Iterator(*this, m_entities.size()); }
+
+    [[nodiscard]] static ComponentMask accessMask()
+    {
+        ComponentMask mask;
+
+        ReadAccesses::setMask(mask);
+        WriteAccesses::setMask(mask);
+        WithAccesses::setMask(mask);
+
+        return mask;
+    }
+
+    [[nodiscard]] static ComponentMask writeAccessMask()
+    {
+        ComponentMask mask;
+
+        WriteAccesses::setMask(mask);
+
+        return mask;
+    }
 
     friend class Iterator;
 

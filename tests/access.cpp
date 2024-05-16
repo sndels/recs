@@ -82,6 +82,24 @@ TEST_CASE("Entity")
     REQUIRE(trfn.trfn[2] == 3.f);
     HealthComponent const &h = dmg.getComponent<HealthComponent>();
     REQUIRE(h.health == 99.f);
+
+    {
+        recs::ComponentMask referenceMask;
+        referenceMask.set(recs::TypeId::get<TransformComponent>());
+        referenceMask.set(recs::TypeId::get<HealthComponent>());
+        referenceMask.set(recs::TypeId::get<CharacterComponent>());
+
+        recs::ComponentMask const mask = dmg.accessMask();
+        REQUIRE(referenceMask == mask);
+    }
+
+    {
+        recs::ComponentMask referenceMask;
+        referenceMask.set(recs::TypeId::get<HealthComponent>());
+
+        recs::ComponentMask const mask = dmg.writeAccessMask();
+        REQUIRE(referenceMask == mask);
+    }
 }
 
 TEST_CASE("Query")
@@ -168,4 +186,23 @@ TEST_CASE("Query")
     REQUIRE(trfn_sum.trfn[1] == 222.f);
     REQUIRE(trfn_sum.trfn[2] == 333.f);
     REQUIRE(dmg_sum.damageOverTime == 999999.f);
+
+    {
+        recs::ComponentMask referenceMask;
+        referenceMask.set(recs::TypeId::get<TransformComponent>());
+        referenceMask.set(recs::TypeId::get<DamageSourceComponent>());
+        // TODO: Some 'write' component
+        // TODO: Some 'with' component
+
+        recs::ComponentMask const mask = q.accessMask();
+        REQUIRE(referenceMask == mask);
+    }
+
+    {
+        recs::ComponentMask referenceMask;
+        // TODO: Some 'write' component
+
+        recs::ComponentMask const mask = q.writeAccessMask();
+        REQUIRE(referenceMask == mask);
+    }
 }
