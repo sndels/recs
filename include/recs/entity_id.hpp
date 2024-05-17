@@ -20,6 +20,16 @@ class EntityId
     EntityId(EntityId const &) noexcept = default;
     EntityId &operator=(EntityId const &) noexcept = default;
 
+    [[nodiscard]] bool operator==(EntityId other) const noexcept
+    {
+        return m_gen_id == other.m_gen_id;
+    }
+
+    [[nodiscard]] bool operator!=(EntityId other) const noexcept
+    {
+        return m_gen_id != other.m_gen_id;
+    }
+
     friend class ComponentStorage;
 
   private:
