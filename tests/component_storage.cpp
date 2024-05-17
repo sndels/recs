@@ -59,3 +59,159 @@ TEST_CASE("ComponentStorage")
     REQUIRE(!ecs.hasComponent<DataF>(e0));
     REQUIRE(!ecs.hasComponent<DataI>(e0));
 }
+
+// Thanks ChatGPT, first try got almost what's here now
+TEST_CASE("getEntities")
+{
+    recs::ComponentStorage cs;
+
+    SECTION("Add entities and components, retrieve with mask")
+    {
+        recs::EntityId const e0 = cs.addEntity();
+        recs::EntityId const e1 = cs.addEntity();
+
+        // float and uint32_t component
+        cs.addComponent(e0, 1.f);
+        cs.addComponent(e0, 0u);
+        // float component only
+        cs.addComponent(e1, 2.f);
+
+        recs::ComponentMask mask;
+        mask.set(recs::TypeId::get<float>());
+        mask.set(recs::TypeId::get<uint32_t>());
+
+        std::vector<recs::EntityId> const ents = cs.getEntities(mask);
+
+        REQUIRE(ents.size() == 1);
+        REQUIRE(ents[0] == e0);
+    }
+
+    SECTION("No entities match the mask")
+    {
+        recs::EntityId const e0 = cs.addEntity();
+        recs::EntityId const e1 = cs.addEntity();
+
+        cs.addComponent(e0, 1.f); // float component
+        cs.addComponent(e1, 0u);  // uint32_t component
+
+        recs::ComponentMask mask;
+        mask.set(recs::TypeId::get<float>());
+        mask.set(recs::TypeId::get<uint32_t>());
+
+        std::vector<recs::EntityId> const ents = cs.getEntities(mask);
+
+        REQUIRE(ents.empty());
+    }
+
+    SECTION("Retrieve entities with a single component type")
+    {
+        recs::EntityId const e0 = cs.addEntity();
+        recs::EntityId const e1 = cs.addEntity();
+
+        cs.addComponent(e0, 1.f); // float component
+        cs.addComponent(e1, 2.f); // float component
+
+        recs::ComponentMask mask;
+        mask.set(recs::TypeId::get<float>());
+
+        std::vector<recs::EntityId> const ents = cs.getEntities(mask);
+
+        REQUIRE(ents.size() == 2);
+        REQUIRE((ents[0] == e0 || ents[0] == e1));
+        REQUIRE((ents[1] == e0 || ents[1] == e1));
+    }
+
+    SECTION("Retrieve entities with no components")
+    {
+        recs::EntityId const e0 = cs.addEntity();
+        recs::EntityId const e1 = cs.addEntity();
+
+        cs.addComponent(e0, 1.f); // a component
+
+        recs::ComponentMask mask;
+
+        std::vector<recs::EntityId> const ents = cs.getEntities(mask);
+
+        REQUIRE(ents.size() == 2);
+        REQUIRE((ents[0] == e0 || ents[0] == e1));
+        REQUIRE((ents[1] == e0 || ents[1] == e1));
+    }
+
+    SECTION("Adding and retrieving multiple types of components")
+    {
+        recs::EntityId const e0 = cs.addEntity();
+        recs::EntityId const e1 = cs.addEntity();
+        recs::EntityId const e2 = cs.addEntity();
+
+        // float and uint32_t component
+        cs.addComponent(e0, 1.f);
+        cs.addComponent(e0, 0u);
+        // uint32_t component only
+        cs.addComponent(e1, 0u);
+        // float component only
+        cs.addComponent(e2, 3.f);
+
+        recs::ComponentMask mask1;
+        mask1.set(recs::TypeId::get<float>());
+        mask1.set(recs::TypeId::get<uint32_t>());
+
+        std::vector<recs::EntityId> const ents1 = cs.getEntities(mask1);
+
+        REQUIRE(ents1.size() == 1);
+        REQUIRE(ents1[0] == e0);
+
+        recs::ComponentMask mask2;
+        mask2.set(recs::TypeId::get<uint32_t>());
+
+        std::vector<recs::EntityId> const ents2 = cs.getEntities(mask2);
+
+        REQUIRE(ents2.size() == 2);
+        REQUIRE((ents2[0] == e0 || ents2[0] == e1));
+        REQUIRE((ents2[1] == e0 || ents2[1] == e1));
+
+        recs::ComponentMask mask3;
+        mask3.set(recs::TypeId::get<float>());
+
+        std::vector<recs::EntityId> const ents3 = cs.getEntities(mask3);
+
+        REQUIRE(ents3.size() == 2);
+        REQUIRE((ents3[0] == e0 || ents3[0] == e2));
+        REQUIRE((ents3[1] == e0 || ents3[1] == e2));
+    }
+
+    SECTION("Add, remove entities and retrieve with mask")
+    {
+        recs::EntityId const e0 = cs.addEntity();
+        recs::EntityId const e1 = cs.addEntity();
+
+        // float and uint32_t component
+        cs.addComponent(e0, 1.f);
+        cs.addComponent(e0, 0u);
+        // float component only
+        cs.addComponent(e1, 2.f);
+
+        // Remove entity e0
+        cs.removeEntity(e0);
+
+        recs::ComponentMask mask;
+        mask.set(recs::TypeId::get<float>());
+        mask.set(recs::TypeId::get<uint32_t>());
+
+        {
+            std::vector<recs::EntityId> const ents = cs.getEntities(mask);
+
+            // Entity e0 should not be in the list since it has been removed
+            REQUIRE(ents.empty());
+        }
+
+        // Add a new entity, presumably reusing the memory for e0
+        recs::EntityId const e2 = cs.addEntity();
+
+        {
+            std::vector<recs::EntityId> const ents = cs.getEntities(mask);
+
+            // The new entity should not be in the list
+            REQUIRE(ents.empty());
+        }
+    }
+}

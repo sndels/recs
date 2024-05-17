@@ -30,6 +30,8 @@ class ComponentStorage
 
     [[nodiscard]] bool isValid(EntityId id) const;
 
+    [[nodiscard]] std::vector<EntityId> getEntities(ComponentMask mask) const;
+
     void removeEntity(EntityId id);
 
     template <typename T>
@@ -65,6 +67,8 @@ class ComponentStorage
 
     std::vector<ComponentMap> m_component_maps;
     std::vector<uint16_t> m_entity_generations;
+    // TODO: This could be a bit in the stored generation
+    std::vector<bool> m_entity_alive;
     std::deque<uint64_t> m_entity_freelist;
 
     std::vector<ComponentMask> m_entity_component_masks;

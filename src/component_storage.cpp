@@ -23,6 +23,7 @@ EntityId ComponentStorage::addEntity()
         assert(m_entity_generations.size() <= EntityId::s_max_index);
         index = (uint64_t)m_entity_generations.size();
         m_entity_generations.push_back(0);
+        m_entity_alive.push_back(true);
         m_entity_component_masks.emplace_back();
         generation = 0;
     }
@@ -36,6 +37,8 @@ EntityId ComponentStorage::addEntity()
         // Freelist shouldn't have any handles that have exhausted their
         // generations
         assert(generation <= EntityId::s_max_generation);
+        assert(!m_entity_alive[index]);
+        m_entity_alive[index] = true;
     }
 
     EntityId const id{index, generation};
@@ -54,7 +57,38 @@ bool ComponentStorage::isValid(EntityId id) const
 
     uint16_t const generation = id.generation();
     uint16_t const stored_generation = m_entity_generations[index];
-    return generation == stored_generation;
+    bool const generations_match = generation == stored_generation;
+
+    assert(
+        (!generations_match || m_entity_alive[index]) &&
+        "Entity not marked alive is unexpected as stored generation matches "
+        "the handle");
+
+    return generations_match;
+}
+
+std::vector<EntityId> ComponentStorage::getEntities(ComponentMask mask) const
+{
+    std::vector<EntityId> ids;
+    ids.reserve(m_entity_alive.size());
+
+    uint64_t const entity_count = static_cast<uint64_t>(m_entity_alive.size());
+    for (uint64_t id = 0; id < entity_count; ++id)
+    {
+        if (m_entity_alive[id])
+        {
+            ComponentMask const entityMask = m_entity_component_masks[id];
+            if ((entityMask & mask) == mask)
+            {
+                uint16_t const gen = m_entity_generations[id];
+                ids.push_back(EntityId{id, gen});
+            }
+        }
+    }
+
+    ids.shrink_to_fit();
+
+    return ids;
 }
 
 void ComponentStorage::removeEntity(EntityId id)
@@ -65,6 +99,9 @@ void ComponentStorage::removeEntity(EntityId id)
     uint64_t const index = id.index();
     uint16_t &stored_generation = m_entity_generations[index];
     stored_generation++;
+
+    assert(m_entity_alive[index]);
+    m_entity_alive[index] = false;
 
     ComponentMask &mask = m_entity_component_masks[index];
     const size_t mask_bit_count = mask.size();
