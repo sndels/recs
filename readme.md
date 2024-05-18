@@ -1,10 +1,13 @@
 # recs
 
-Remedy had this interesting looking API in their GDC 2024 talk "ECS in Practice: The Case Board of 'Alan Wake 2'" and it wasn't obvious to me how it would be implemented in under the hood. Let's try to find out.
+Remedy had these interesting looking interfaces in their GDC 2024 talk "ECS in Practice: The Case Board of 'Alan Wake 2'" and it wasn't obvious to me how some of them could be implemented under the hood. Let's try to find out.
 
-There were typed queries with access types for system interfaces:
+> [!CAUTION]
+> This is an academic exercise and not intended for actual use. Check out [entt](https://github.com/skypjack/entt), [flecs](https://github.com/SanderMertens/flecs) for something dependable.
 
-```
+Anyhow, there were strongly typed access types for system interfaces:
+
+```C++
 using DamagedCharacterEntity = ecs::Access
     ::Read< TransformComponent >
     ::Write< HealthComponent >
@@ -35,7 +38,7 @@ void dealDamageOverTimeSystem( DamagedCharacterEntity entity, DamageSourceQuery 
 
 Also a command buffer for delayed operations like adding components:
 
-```
+```C++
 void animateWorldTransform( TransformEntity entity, m::Transform targetWorldTransform, SpringParameters springParameters, ecs::CommandBuffer ecb )
 {
     auto& transformComponent = entity.getComponent< component::WorldTransform >();
@@ -49,7 +52,7 @@ void animateWorldTransform( TransformEntity entity, m::Transform targetWorldTran
 
 The queries were registered to a job system that overlapped things it could based on rw access and explicit ordering:
 
-```
+```C++
 void FixedUpdateSystemA( Entity entity, QueryA query, const env::FixedUpdate& fixedUpdate ) { /* ... */ }
 void FixedUpdateSystemB( Entity entity, QueryB query, const env::FixedUpdate& fixedUpdate ) { /* ... */ }
 
