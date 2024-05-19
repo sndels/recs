@@ -35,9 +35,75 @@ void uintDiffSystem(IntEntity e, UintQuery const &q)
         s_uint_diff += value - qe.getComponent<uint32_t>();
 }
 
+// DAG (Roots at the top)
+//       A   B  C
+//      / \ /
+//     D   E
+//      \ / \ 
+//       F   G
+static bool s_a_ran = false;
+void uintASystem(UintEntity) { s_a_ran = true; }
+
+static bool s_b_ran = false;
+void uintBSystem(UintEntity) { s_b_ran = true; }
+
+static bool s_c_ran = false;
+void uintCSystem(UintEntity) { s_c_ran = true; }
+
+static bool s_d_ran = false;
+static bool s_d_ran_after_a = false;
+void uintDSystem(UintEntity)
+{
+    s_d_ran = true;
+    s_d_ran_after_a = s_a_ran;
+}
+
+static bool s_e_ran = false;
+static bool s_e_ran_after_a_and_b = false;
+void uintESystem(UintEntity)
+{
+    s_e_ran = true;
+    s_e_ran_after_a_and_b = s_a_ran && s_b_ran;
+}
+
+static bool s_f_ran = false;
+static bool s_f_ran_after_d_and_e = false;
+void uintFSystem(UintEntity)
+{
+    s_f_ran = true;
+    s_f_ran_after_d_and_e = s_d_ran && s_e_ran;
+}
+
+static bool s_g_ran = false;
+static bool s_g_ran_after_e = false;
+void uintGSystem(UintEntity)
+{
+    s_g_ran = true;
+    s_g_ran_after_e = s_e_ran;
+}
+
+struct Dag
+{
+    recs::SystemRef a;
+    recs::SystemRef b;
+    recs::SystemRef c;
+    recs::SystemRef d;
+    recs::SystemRef e;
+    recs::SystemRef f;
+    recs::SystemRef g;
+};
+
+void setUpGraph(Dag const &dag)
+{
+    dag.d.executeAfter(dag.a);
+    dag.e.executeAfter(dag.a).executeAfter(dag.b);
+    dag.f.executeAfter(dag.d).executeAfter(dag.e);
+    dag.g.executeAfter(dag.e);
+}
+
 } // namespace
 
-TEST_CASE("Scheduler")
+TEST_CASE("Scheduler basic")
 {
     recs::Scheduler scheduler;
     recs::ComponentStorage storage;
@@ -89,13 +155,141 @@ TEST_CASE("Scheduler")
     scheduler.registerSystem(combinedSumSystem);
     scheduler.registerSystem(uintDiffSystem);
 
+    recs::Schedule const schedule = scheduler.buildSchedule();
+
     s_int_sum = 0;
     s_uint_sum = 0;
     s_combined_sum = 0;
     s_uint_diff = 0;
-    scheduler.executeSystems(storage);
+    schedule.execute(storage);
     REQUIRE(s_int_sum == ref_int_sum);
     REQUIRE(s_uint_sum == ref_uint_sum);
     REQUIRE(s_combined_sum == ref_combined_sum);
     REQUIRE(s_uint_diff == ref_uint_diff);
+}
+
+TEST_CASE("Scheduler dependencies")
+{
+    recs::Scheduler scheduler;
+    recs::ComponentStorage storage;
+
+    recs::EntityId const e = storage.addEntity();
+    storage.addComponent(e, 0u);
+
+    SECTION("Ordered push")
+    {
+        Dag dag;
+        dag.a = scheduler.registerSystem(uintASystem);
+        dag.b = scheduler.registerSystem(uintBSystem);
+        dag.c = scheduler.registerSystem(uintCSystem);
+        dag.d = scheduler.registerSystem(uintDSystem);
+        dag.e = scheduler.registerSystem(uintESystem);
+        dag.f = scheduler.registerSystem(uintFSystem);
+        dag.g = scheduler.registerSystem(uintGSystem);
+
+        setUpGraph(dag);
+
+        recs::Schedule const schedule = scheduler.buildSchedule();
+        s_a_ran = false;
+        s_b_ran = false;
+        s_c_ran = false;
+        s_d_ran = false;
+        s_e_ran = false;
+        s_f_ran = false;
+        s_g_ran = false;
+        s_d_ran_after_a = false;
+        s_e_ran_after_a_and_b = false;
+        s_f_ran_after_d_and_e = false;
+        s_g_ran_after_e = false;
+        schedule.execute(storage);
+        REQUIRE(s_a_ran);
+        REQUIRE(s_b_ran);
+        REQUIRE(s_c_ran);
+        REQUIRE(s_d_ran);
+        REQUIRE(s_e_ran);
+        REQUIRE(s_f_ran);
+        REQUIRE(s_g_ran);
+        REQUIRE(s_d_ran_after_a);
+        REQUIRE(s_e_ran_after_a_and_b);
+        REQUIRE(s_f_ran_after_d_and_e);
+        REQUIRE(s_g_ran_after_e);
+    }
+
+    SECTION("Reverse push")
+    {
+        Dag dag;
+        dag.g = scheduler.registerSystem(uintGSystem);
+        dag.f = scheduler.registerSystem(uintFSystem);
+        dag.e = scheduler.registerSystem(uintESystem);
+        dag.d = scheduler.registerSystem(uintDSystem);
+        dag.c = scheduler.registerSystem(uintCSystem);
+        dag.b = scheduler.registerSystem(uintBSystem);
+        dag.a = scheduler.registerSystem(uintASystem);
+
+        setUpGraph(dag);
+
+        recs::Schedule const schedule = scheduler.buildSchedule();
+        s_a_ran = false;
+        s_b_ran = false;
+        s_c_ran = false;
+        s_d_ran = false;
+        s_e_ran = false;
+        s_f_ran = false;
+        s_g_ran = false;
+        s_d_ran_after_a = false;
+        s_e_ran_after_a_and_b = false;
+        s_f_ran_after_d_and_e = false;
+        s_g_ran_after_e = false;
+        schedule.execute(storage);
+        REQUIRE(s_a_ran);
+        REQUIRE(s_b_ran);
+        REQUIRE(s_c_ran);
+        REQUIRE(s_d_ran);
+        REQUIRE(s_e_ran);
+        REQUIRE(s_f_ran);
+        REQUIRE(s_g_ran);
+        REQUIRE(s_d_ran_after_a);
+        REQUIRE(s_e_ran_after_a_and_b);
+        REQUIRE(s_f_ran_after_d_and_e);
+        REQUIRE(s_g_ran_after_e);
+    }
+
+    SECTION("Scramble")
+    {
+        Dag dag;
+        dag.f = scheduler.registerSystem(uintFSystem);
+        dag.g = scheduler.registerSystem(uintGSystem);
+        dag.c = scheduler.registerSystem(uintCSystem);
+        dag.e = scheduler.registerSystem(uintESystem);
+        dag.a = scheduler.registerSystem(uintASystem);
+        dag.b = scheduler.registerSystem(uintBSystem);
+        dag.d = scheduler.registerSystem(uintDSystem);
+
+        setUpGraph(dag);
+
+        recs::Schedule const schedule = scheduler.buildSchedule();
+        s_a_ran = false;
+        s_b_ran = false;
+        s_c_ran = false;
+        s_d_ran = false;
+        s_e_ran = false;
+        s_f_ran = false;
+        s_g_ran = false;
+        s_d_ran_after_a = false;
+        s_e_ran_after_a_and_b = false;
+        s_f_ran_after_d_and_e = false;
+        s_g_ran_after_e = false;
+        schedule.execute(storage);
+        REQUIRE(s_a_ran);
+        REQUIRE(s_b_ran);
+        REQUIRE(s_c_ran);
+        REQUIRE(s_d_ran);
+        REQUIRE(s_e_ran);
+        REQUIRE(s_f_ran);
+        REQUIRE(s_g_ran);
+        REQUIRE(s_d_ran_after_a);
+        REQUIRE(s_e_ran_after_a_and_b);
+        REQUIRE(s_f_ran_after_d_and_e);
+        REQUIRE(s_g_ran_after_e);
+    }
 }
