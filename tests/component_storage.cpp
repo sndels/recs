@@ -206,6 +206,7 @@ TEST_CASE("getEntities")
 
         // Add a new entity, presumably reusing the memory for e0
         recs::EntityId const e2 = cs.addEntity();
+        (void)e2;
 
         {
             std::vector<recs::EntityId> const ents = cs.getEntities(mask);

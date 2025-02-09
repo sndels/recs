@@ -1,4 +1,4 @@
-#include "recs/Scheduler.hpp"
+#include "recs/scheduler.hpp"
 
 namespace recs
 {
