@@ -2,9 +2,10 @@ cmake_minimum_required(VERSION 3.20)
 project(recs)
 
 add_subdirectory(ext)
+add_subdirectory(include/recs)
 add_subdirectory(src)
 
-add_library(recs STATIC ${RECS_SOURCES})
+add_library(recs STATIC ${RECS_SOURCES} ${RECS_HEADERS})
 target_compile_features(recs
     PUBLIC
     cxx_std_20
