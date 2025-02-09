@@ -122,31 +122,6 @@ class Query
 };
 
 template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
-class AccessBuilder
-{
-  public:
-    template <typename T>
-    using Read = AccessBuilder<
-        typename ReadAccesses::template Append<T>, WriteAccesses, WithAccesses>;
-
-    template <typename T>
-    using Write = AccessBuilder<
-        ReadAccesses, typename WriteAccesses::template Append<T>, WithAccesses>;
-
-    template <typename T>
-    using With = AccessBuilder<
-        ReadAccesses, WriteAccesses, typename WithAccesses::template Append<T>>;
-
-    template <template <
-        typename EntityReads, typename EntityWrites, typename EntityWiths>
-              typename T>
-    using As = T<ReadAccesses, WriteAccesses, WithAccesses>;
-};
-
-using Access =
-    AccessBuilder<ReadAccessesType<>, WriteAccessesType<>, WithAccessesType<>>;
-
-template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
 Entity<ReadAccesses, WriteAccesses, WithAccesses>::Entity(
     ComponentStorage const &cs, EntityId id)
 : m_cs{cs}
