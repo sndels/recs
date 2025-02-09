@@ -33,9 +33,9 @@ class EntityId
     friend class ComponentStorage;
 
   private:
-    static uint64_t const s_invalid_id = 0xFFFFFFFFFFFFFFFF;
+    static uint64_t const s_invalid_id = 0xFFFF'FFFF'FFFF'FFFF;
     static uint8_t const s_index_bits = 48;
-    static uint64_t const s_index_mask = 0xFFFFFFFFFFFF;
+    static uint64_t const s_index_mask = 0xFFFF'FFFF'FFFF;
     static uint64_t const s_max_index = s_index_mask - 1;
     // 0xFFFF could be used mark handles that have been exhausted.
     static uint16_t const s_max_generation = 0xFFFE;
