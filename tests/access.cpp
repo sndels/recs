@@ -21,11 +21,18 @@ struct DamageSourceComponent
     float damageOverTime{0.f};
 };
 
-using DamagedCharacterEntity = recs::Access::Read<TransformComponent>::Write<
-    HealthComponent>::With<CharacterComponent>::As<recs::Entity>;
+using DamagedCharacterAccesses = recs::Access::Read<TransformComponent>::Write<
+    HealthComponent>::With<CharacterComponent>;
+using DamagedCharacterEntity = DamagedCharacterAccesses::As<recs::Entity>;
+using DamagedCharacterQuery = DamagedCharacterAccesses::As<recs::Query>;
+using DamagedCharacterQueryIterator =
+    DamagedCharacterAccesses::As<recs::QueryIterator>;
 
-using DamageSourceQuery = recs::Access::Read<DamageSourceComponent>::Read<
-    TransformComponent>::As<recs::Query>;
+using DamageSourceAccesses =
+    recs::Access::Read<DamageSourceComponent>::Read<TransformComponent>;
+using DamageSourceEntity = DamageSourceAccesses::As<recs::Entity>;
+using DamageSourceQuery = DamageSourceAccesses::As<recs::Query>;
+using DamageSourceQueryIterator = DamageSourceAccesses::As<recs::QueryIterator>;
 
 } // namespace
 
@@ -75,7 +82,7 @@ TEST_CASE("Entity")
             });
     cs.addComponent(e0, CharacterComponent{});
 
-    DamagedCharacterEntity dmg(cs, e0);
+    DamagedCharacterEntity dmg{cs, e0};
     TransformComponent const &trfn = dmg.getComponent<TransformComponent>();
     REQUIRE(trfn.trfn[0] == 1.f);
     REQUIRE(trfn.trfn[1] == 2.f);
@@ -136,42 +143,39 @@ TEST_CASE("Query")
                 .damageOverTime = 990000.f,
             });
 
-    DamageSourceQuery q{cs, {e0, e1, e2}};
+    DamageSourceQuery q{cs.getEntities(DamageSourceQuery::accessMask())};
     {
-        DamageSourceQuery::Iterator iter = q.begin();
-        DamageSourceQuery::Iterator const begin_iter = iter;
-        REQUIRE(iter != q.end());
+        DamageSourceQueryIterator iter = q.begin();
+
+        DamageSourceQueryIterator const end_iter = q.end();
+        REQUIRE(iter != end_iter);
         REQUIRE(iter->getComponent<TransformComponent>().trfn[0] == 1.f);
         REQUIRE(iter->getComponent<TransformComponent>().trfn[1] == 2.f);
         REQUIRE(iter->getComponent<TransformComponent>().trfn[2] == 3.f);
         REQUIRE(
             iter->getComponent<DamageSourceComponent>().damageOverTime == 99.f);
-        {
-            DamageSourceQuery::Iterator const tmp_iter = iter++;
-            REQUIRE(tmp_iter == begin_iter);
-        }
-        REQUIRE(iter != q.end());
+        ++iter;
+        REQUIRE(iter != end_iter);
         REQUIRE(iter->getComponent<TransformComponent>().trfn[0] == 10.f);
         REQUIRE(iter->getComponent<TransformComponent>().trfn[1] == 20.f);
         REQUIRE(iter->getComponent<TransformComponent>().trfn[2] == 30.f);
         REQUIRE(
             iter->getComponent<DamageSourceComponent>().damageOverTime ==
             9900.f);
-        {
-            DamageSourceQuery::Iterator const tmp_iter = ++iter;
-            REQUIRE(tmp_iter == iter);
-        }
-        REQUIRE(iter != q.end());
+        ++iter;
+        REQUIRE(iter != end_iter);
         REQUIRE(iter->getComponent<TransformComponent>().trfn[0] == 100.f);
         REQUIRE(iter->getComponent<TransformComponent>().trfn[1] == 200.f);
         REQUIRE(iter->getComponent<TransformComponent>().trfn[2] == 300.f);
         REQUIRE(
             iter->getComponent<DamageSourceComponent>().damageOverTime ==
             990000.f);
+        ++iter;
+        REQUIRE(iter == end_iter);
     }
     TransformComponent trfn_sum;
     DamageSourceComponent dmg_sum;
-    for (auto &entity : q)
+    for (DamageSourceEntity entity : q)
     {
         TransformComponent const &trfn =
             entity.getComponent<TransformComponent>();
