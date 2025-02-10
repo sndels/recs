@@ -15,9 +15,46 @@
 namespace recs
 {
 
+// TODO: fwd.h
+template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
+class Entity;
+template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
+class QueryIterator;
+
 class ComponentStorage
 {
   public:
+    // Don't bother restricting immutable component access because this is only
+    // used directly by the strongly typed Query:Iterator
+    class Range
+    {
+      public:
+        ~Range() = default;
+
+        Range(Range &) = default;
+        Range(Range &&) = default;
+        Range &operator=(Range &) = delete;
+        Range &operator=(Range &&) = delete;
+
+        [[nodiscard]] size_t size() const;
+        [[nodiscard]] bool empty() const;
+        [[nodiscard]] EntityId getId(size_t index) const;
+        template <typename T>
+            requires ValidComponent<T>
+        [[nodiscard]] bool hasComponent(size_t index) const;
+        template <typename T>
+            requires ValidComponent<T>
+        [[nodiscard]] T &getComponent(size_t index) const;
+
+        friend class ComponentStorage;
+
+      private:
+        Range(ComponentStorage const &cs, std::vector<EntityId> &&entities);
+
+        ComponentStorage const &m_cs;
+        std::vector<EntityId> m_entities;
+    };
+
     ComponentStorage() = default;
     ~ComponentStorage();
 
@@ -30,7 +67,10 @@ class ComponentStorage
 
     [[nodiscard]] bool isValid(EntityId id) const;
 
-    [[nodiscard]] std::vector<EntityId> getEntities(ComponentMask mask) const;
+    [[nodiscard]] Range getEntities(ComponentMask mask) const;
+    // TODO:
+    // getEntity? Seems antithetic to the paradigm, but could also be required
+    // when links are needed between individual entities?
 
     void removeEntity(EntityId id);
 
@@ -76,6 +116,25 @@ class ComponentStorage
 
 template <typename T>
     requires ValidComponent<T>
+bool ComponentStorage::Range::hasComponent(size_t index) const
+{
+    assert(index < m_entities.size());
+    EntityId const id = m_entities[index];
+    return m_cs.hasComponent<T>(id);
+}
+
+template <typename T>
+    requires ValidComponent<T>
+T &ComponentStorage::Range::getComponent(size_t index) const
+{
+    assert(index < m_entities.size());
+    EntityId const id = m_entities[index];
+    assert(m_cs.hasComponent<T>(id));
+    return m_cs.getComponent<T>(id);
+}
+
+template <typename T>
+    requires ValidComponent<T>
 void ComponentStorage::addComponent(EntityId id, T const &c)
 {
     assert(isValid(id));
@@ -101,8 +160,8 @@ void ComponentStorage::addComponent(EntityId id, T const &c)
 }
 
 template <typename T>
-    requires ValidComponent<T> bool
-ComponentStorage::hasComponent(EntityId id) const
+    requires ValidComponent<T>
+bool ComponentStorage::hasComponent(EntityId id) const
 {
     assert(isValid(id));
 
@@ -115,8 +174,8 @@ ComponentStorage::hasComponent(EntityId id) const
 }
 
 template <typename... Ts>
-    requires(ValidComponent<Ts> && ...) bool
-ComponentStorage::hasComponents(EntityId id) const
+    requires(ValidComponent<Ts> && ...)
+bool ComponentStorage::hasComponents(EntityId id) const
 {
     return (hasComponent<Ts>(id) && ...);
 }

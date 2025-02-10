@@ -5,6 +5,23 @@
 namespace recs
 {
 
+size_t ComponentStorage::Range::size() const { return m_entities.size(); }
+
+bool ComponentStorage::Range::empty() const { return m_entities.empty(); }
+
+EntityId ComponentStorage::Range::getId(size_t index) const
+{
+    assert(index < m_entities.size());
+    return m_entities[index];
+};
+
+ComponentStorage::Range::Range(
+    ComponentStorage const &cs, std::vector<EntityId> &&entities)
+: m_cs{cs}
+, m_entities{std::move(entities)}
+{
+}
+
 ComponentStorage::~ComponentStorage()
 {
     for (ComponentMap &cm : m_component_maps)
@@ -67,7 +84,7 @@ bool ComponentStorage::isValid(EntityId id) const
     return generations_match;
 }
 
-std::vector<EntityId> ComponentStorage::getEntities(ComponentMask mask) const
+ComponentStorage::Range ComponentStorage::getEntities(ComponentMask mask) const
 {
     std::vector<EntityId> ids;
     ids.reserve(m_entity_alive.size());
@@ -88,7 +105,7 @@ std::vector<EntityId> ComponentStorage::getEntities(ComponentMask mask) const
 
     ids.shrink_to_fit();
 
-    return ids;
+    return Range{*this, std::move(ids)};
 }
 
 void ComponentStorage::removeEntity(EntityId id)

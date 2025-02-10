@@ -116,9 +116,10 @@ SystemRef Scheduler::registerSystem(
         .func =
             [system, access_mask](ComponentStorage const &cs)
         {
-            std::vector<EntityId> const ents = cs.getEntities(access_mask);
-            for (EntityId const &id : ents)
-                system(EntityT{cs, id});
+            Query<EntityReads, EntityWrites, EntityWiths> const entities_query{
+                cs.getEntities(access_mask)};
+            for (EntityT entity : entities_query)
+                system(entity);
         },
     };
 
@@ -150,13 +151,12 @@ SystemRef Scheduler::registerSystem(void (*system)(
         .func =
             [system, access_mask, query_access_mask](ComponentStorage const &cs)
         {
-            std::vector<EntityId> const query_ents =
-                cs.getEntities(query_access_mask);
-            QueryT const query{cs, query_ents};
+            QueryT const query{cs.getEntities(query_access_mask)};
 
-            std::vector<EntityId> const ents = cs.getEntities(access_mask);
-            for (EntityId const &id : ents)
-                system(EntityT{cs, id}, query);
+            Query<EntityReads, EntityWrites, EntityWiths> const entities_query{
+                cs.getEntities(access_mask)};
+            for (EntityT entity : entities_query)
+                system(entity, query);
         },
     };
 
