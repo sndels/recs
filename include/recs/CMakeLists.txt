@@ -1,6 +1,7 @@
 set(RECS_HEADERS
     ${CMAKE_CURRENT_LIST_DIR}/access.hpp
     ${CMAKE_CURRENT_LIST_DIR}/accesses_types.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/component_mask.hpp
     ${CMAKE_CURRENT_LIST_DIR}/component_storage.hpp
     ${CMAKE_CURRENT_LIST_DIR}/concepts.hpp
     ${CMAKE_CURRENT_LIST_DIR}/inline.hpp

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "component_mask.hpp"
 #include "concepts.hpp"
 #include "type_id.hpp"
 

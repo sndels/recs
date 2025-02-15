@@ -95,7 +95,7 @@ ComponentStorage::Range ComponentStorage::getEntities(ComponentMask mask) const
         if (m_entity_alive[id])
         {
             ComponentMask const entityMask = m_entity_component_masks[id];
-            if ((entityMask & mask) == mask)
+            if (entityMask.test_all(mask))
             {
                 uint16_t const gen = m_entity_generations[id];
                 ids.push_back(EntityId{id, gen});
@@ -121,10 +121,9 @@ void ComponentStorage::removeEntity(EntityId id)
     m_entity_alive[index] = false;
 
     ComponentMask &mask = m_entity_component_masks[index];
-    const size_t mask_bit_count = mask.size();
-    for (size_t i = 0; i < mask_bit_count; ++i)
+    for (size_t i = 0; i < ComponentMask::s_bit_count; ++i)
     {
-        if (mask[i])
+        if (mask.test(i))
         {
             ComponentMap &cs = m_component_maps[i];
 

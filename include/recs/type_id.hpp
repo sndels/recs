@@ -1,6 +1,5 @@
 #pragma once
 
-#include <bitset>
 #include <cstddef>
 #include <cstdint>
 
@@ -10,7 +9,8 @@ namespace recs
 class TypeId
 {
   public:
-    // Use a reasonably large bitset to see the perf implications of this design
+    // Use a reasonably large maximum to see the perf implications of this
+    // design
     static size_t const s_max_component_type_count = 1024;
 
     // Returns a unique, thread-safe, constant id for the type. The ids can only
@@ -29,8 +29,5 @@ class TypeId
     // Helper for typeId(), wrapping a thread-safe counter
     static uint64_t runningTypeId();
 };
-
-// TODO: Should this be a in separate header?
-using ComponentMask = std::bitset<TypeId::s_max_component_type_count>;
 
 } // namespace recs

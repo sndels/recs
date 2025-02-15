@@ -1,14 +1,13 @@
 #pragma once
 
+#include "component_mask.hpp"
 #include "concepts.hpp"
 #include "entity_id.hpp"
 #include "type_id.hpp"
-#include <bitset>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <deque>
-#include <typeindex>
 #include <unordered_map>
 #include <vector>
 
