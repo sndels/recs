@@ -9,6 +9,25 @@
     "shell": "system"
   },
   {
+    "label": "Generate compile commands (Windows)",
+    "command": "./scripts/generate_compile_commands.bat",
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always",
+    "hide": "never",
+    "shell": "system"
+  },
+  {
+    "label": "MSbuild and run tests (Debug)",
+    "command": "./scripts/msbuild.bat Debug",
+    "args": ["Debug"],
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always",
+    "hide": "never",
+    "shell": "system"
+  },
+  {
     "label": "Ninja build and run tests (Debug)",
     "command": "./scripts/ninja.sh",
     "args": ["Debug"],
