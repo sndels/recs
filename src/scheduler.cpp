@@ -46,7 +46,7 @@ Schedule::Schedule(std::vector<SystemFunc> &&systems)
 {
 }
 
-void Schedule::execute(ComponentStorage const &cs) const
+void Schedule::execute(ComponentStorage &cs) const
 {
     for (SystemFunc const &fn : m_systems)
         fn(cs);

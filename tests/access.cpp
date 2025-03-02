@@ -82,7 +82,12 @@ TEST_CASE("Entity")
             });
     cs.addComponent(e0, CharacterComponent{});
 
+#ifdef RECS_HASHMAP_STORAGE
     DamagedCharacterEntity dmg{cs, e0};
+#else // !RECS_HASHMAP_STORAGE
+    recs::ChunkEntityRef ref = cs.getEntity(e0);
+    DamagedCharacterEntity dmg{ref};
+#endif // RECS_HASHMAP_STORAGE
     TransformComponent const &trfn = dmg.getComponent<TransformComponent>();
     REQUIRE(trfn.trfn[0] == 1.f);
     REQUIRE(trfn.trfn[1] == 2.f);

@@ -36,7 +36,7 @@ class SystemRef
     size_t m_index{0};
 };
 
-using SystemFunc = std::function<void(ComponentStorage const &)>;
+using SystemFunc = std::function<void(ComponentStorage &)>;
 
 class Schedule
 {
@@ -48,7 +48,7 @@ class Schedule
     Schedule &operator=(Schedule const &) = delete;
     Schedule &operator=(Schedule &&) = default;
 
-    void execute(ComponentStorage const &cs) const;
+    void execute(ComponentStorage &cs) const;
 
     friend class Scheduler;
 
@@ -114,7 +114,7 @@ SystemRef Scheduler::registerSystem(
 
     System const s{
         .func =
-            [system, access_mask](ComponentStorage const &cs)
+            [system, access_mask](ComponentStorage &cs)
         {
             Query<EntityReads, EntityWrites, EntityWiths> const entities_query{
                 cs.getEntities(access_mask)};
@@ -149,7 +149,7 @@ SystemRef Scheduler::registerSystem(void (*system)(
 
     System const s{
         .func =
-            [system, access_mask, query_access_mask](ComponentStorage const &cs)
+            [system, access_mask, query_access_mask](ComponentStorage &cs)
         {
             QueryT const query{cs.getEntities(query_access_mask)};
 

@@ -19,4 +19,6 @@ uint64_t TypeId::runningTypeId()
     return ret;
 }
 
+size_t g_component_sizes[TypeId::s_max_component_type_count];
+
 } // namespace recs
