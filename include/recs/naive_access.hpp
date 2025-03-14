@@ -1,11 +1,11 @@
 #pragma once
 
 #include "accesses_types.hpp"
-#include "component_storage.hpp"
+#include "naive_component_storage.hpp"
 #include "type_id.hpp"
 #include <cstdint>
 
-namespace recs
+namespace recs::naive
 {
 
 template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
@@ -15,12 +15,17 @@ template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
 class Entity
 {
   public:
-    Entity() = default;
-    Entity(ChunkEntityRef ref);
+    Entity(ComponentStorage const &cs, EntityId id);
+    // Copy range and position to permit having multiple entities around from a
+    // single Query
+    Entity(ComponentStorage::Range const &range, size_t pos);
+    Entity(ComponentStorage::Range const &range);
     ~Entity() = default;
 
     Entity(Entity const &) = default;
+    Entity(Entity &&) = default;
     Entity &operator=(Entity const &) = default;
+    Entity &operator=(Entity &&) = default;
 
     template <typename T>
         requires(Contains<ReadAccesses, T>)
@@ -53,7 +58,8 @@ class Entity
     // TODO:
     // Support structured bindings into components?
   private:
-    ChunkEntityRef m_chunk_ref;
+    ComponentStorage const *m_cs{nullptr};
+    EntityId m_id;
 };
 
 template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
@@ -68,11 +74,16 @@ class QueryIterator
     ~QueryIterator() = default;
 
     QueryIterator(QueryIterator const &) = default;
-    QueryIterator(QueryIterator &&) = delete;
+    QueryIterator(QueryIterator &&) = default;
     QueryIterator &operator=(QueryIterator const &) = default;
-    QueryIterator &operator=(QueryIterator &&) = delete;
+    QueryIterator &operator=(QueryIterator &&) = default;
 
     QueryIterator &operator++();
+    // Returns by value instead of by ref to avoid confusion when ++ invalidates
+    // the previous returned ref
+    // TODO:
+    // What are the usual rules, can operator++ invalidate results from previous
+    // iterator dereference?
     [[nodiscard]] EntityType operator*() const;
     [[nodiscard]] EntityType const *operator->() const;
     [[nodiscard]] bool operator!=(QueryIterator const &other) const;
@@ -81,14 +92,12 @@ class QueryIterator
     friend class Query<ReadAccesses, WriteAccesses, WithAccesses>;
 
   private:
-    QueryIterator(
-        ComponentStorage::Range const &range, size_t chunk_index,
-        EntitiesChunk::IndexT entity_index);
+    QueryIterator(ComponentStorage::Range const &range, size_t pos);
+    QueryIterator(ComponentStorage::Range const &range);
     QueryIterator() = default;
 
-    ComponentStorage::Range const &m_range;
-    size_t m_chunk_index{0};
-    EntitiesChunk::IndexT m_entity_index{0};
+    ComponentStorage::Range const *m_range{nullptr};
+    size_t m_pos{0};
     EntityType m_current_entity;
 };
 
@@ -113,12 +122,12 @@ class Query
     QueryIterator<ReadAccesses, WriteAccesses, WithAccesses> begin() const
     {
         return QueryIterator<ReadAccesses, WriteAccesses, WithAccesses>(
-            m_range, 0, 0);
+            m_range, 0);
     }
     QueryIterator<ReadAccesses, WriteAccesses, WithAccesses> end() const
     {
         return QueryIterator<ReadAccesses, WriteAccesses, WithAccesses>(
-            m_range, m_range.m_chunks.size(), 0);
+            m_range);
     }
 
     [[nodiscard]] static ComponentMask accessMask()
@@ -148,8 +157,31 @@ class Query
 };
 
 template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
-Entity<ReadAccesses, WriteAccesses, WithAccesses>::Entity(ChunkEntityRef ref)
-: m_chunk_ref{ref}
+Entity<ReadAccesses, WriteAccesses, WithAccesses>::Entity(
+    ComponentStorage const &cs, EntityId id)
+: m_cs{&cs}
+, m_id{id}
+{
+    // TODO:
+    // Figure out how to assert entity components here in addition to the
+    // getters for an earlier error. Getting types out of accesses seems tricky.
+}
+
+template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
+Entity<ReadAccesses, WriteAccesses, WithAccesses>::Entity(
+    ComponentStorage::Range const &range, size_t pos)
+: m_cs{&range.m_cs}
+, m_id{range.m_entities[pos]}
+{
+    // TODO:
+    // Figure out how to assert entity components here in addition to the
+    // getters for an earlier error. Getting types out of accesses seems tricky.
+}
+
+template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
+Entity<ReadAccesses, WriteAccesses, WithAccesses>::Entity(
+    ComponentStorage::Range const &range)
+: m_cs{&range.m_cs}
 {
 }
 
@@ -158,8 +190,10 @@ template <typename T>
     requires(Contains<ReadAccesses, T>)
 T const &Entity<ReadAccesses, WriteAccesses, WithAccesses>::getComponent() const
 {
-    assert(m_chunk_ref.isValid());
-    return m_chunk_ref.chunk->getComponent<T>(m_chunk_ref.entity_index);
+    assert(m_cs != nullptr);
+    assert(
+        m_cs->hasComponent<T>(m_id) && "The entity is missing this component");
+    return m_cs->getComponent<T>(m_id);
 }
 
 template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
@@ -167,58 +201,41 @@ template <typename T>
     requires(Contains<WriteAccesses, T>)
 T &Entity<ReadAccesses, WriteAccesses, WithAccesses>::getComponent() const
 {
-    assert(m_chunk_ref.isValid());
-    return m_chunk_ref.chunk->getComponent<T>(m_chunk_ref.entity_index);
+    assert(m_cs != nullptr);
+    assert(
+        m_cs->hasComponent<T>(m_id) && "The entity is missing this component");
+    return m_cs->getComponent<T>(m_id);
 }
 
 template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
 QueryIterator<ReadAccesses, WriteAccesses, WithAccesses>::QueryIterator(
-    ComponentStorage::Range const &range, size_t chunk_index,
-    EntitiesChunk::IndexT entity_index)
-: m_range{range}
-, m_chunk_index{chunk_index}
-, m_entity_index{entity_index}
+    ComponentStorage::Range const &range, size_t pos)
+: m_range{&range}
+, m_pos{pos}
+, m_current_entity{*m_range, m_pos}
 {
-    if (m_chunk_index < range.m_chunks.size())
-    {
-        EntitiesChunk const *chunk = m_range.m_chunks[m_chunk_index];
-        if (chunk->m_ids[m_entity_index] == EntityId{})
-            ++(*this);
-        if (m_chunk_index < range.m_chunks.size() ||
-            m_entity_index < EntitiesChunk::s_max_entities)
-        {
-            m_current_entity = EntityType{ChunkEntityRef{
-                .chunk = m_range.m_chunks[m_chunk_index],
-                .entity_index = entity_index,
-            }};
-        }
-    }
+}
+
+template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
+QueryIterator<ReadAccesses, WriteAccesses, WithAccesses>::QueryIterator(
+    ComponentStorage::Range const &range)
+: m_range{&range}
+, m_pos{range.size()}
+, m_current_entity{*m_range}
+{
 }
 
 template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
 QueryIterator<ReadAccesses, WriteAccesses, WithAccesses> &QueryIterator<
     ReadAccesses, WriteAccesses, WithAccesses>::operator++()
 {
-    size_t const chunk_count = m_range.m_chunks.size();
-    while (m_chunk_index < chunk_count)
-    {
-        m_entity_index++;
-        if (m_entity_index == EntitiesChunk::s_max_entities)
-        {
-            m_entity_index = 0;
-            m_chunk_index++;
-        }
-        if (m_chunk_index == chunk_count)
-            break;
-        EntitiesChunk const *chunk = m_range.m_chunks[m_chunk_index];
-        if (chunk->m_ids[m_entity_index] != EntityId{})
-            break;
-    }
-    if (m_chunk_index < chunk_count)
-        m_current_entity = m_current_entity = EntityType{ChunkEntityRef{
-            .chunk = m_range.m_chunks[m_chunk_index],
-            .entity_index = m_entity_index,
-        }};
+    assert(m_range != nullptr);
+    assert(m_pos < m_range->size());
+    m_pos++;
+    if (m_pos < m_range->size())
+        m_current_entity = EntityType{*m_range, m_pos};
+    else
+        m_current_entity = EntityType{*m_range};
     return *this;
 }
 
@@ -241,11 +258,9 @@ bool QueryIterator<ReadAccesses, WriteAccesses, WithAccesses>::operator==(
     QueryIterator const &other) const
 {
     assert(
-        &m_range == &other.m_range &&
-        "Comparing iterators to different ranges");
+        m_range == other.m_range && "Comparing iterators to different ranges");
 
-    bool const ret = m_chunk_index == other.m_chunk_index &&
-                     m_entity_index == other.m_entity_index;
+    bool const ret = m_pos == other.m_pos;
     return ret;
 }
 
@@ -254,12 +269,10 @@ bool QueryIterator<ReadAccesses, WriteAccesses, WithAccesses>::operator!=(
     QueryIterator const &other) const
 {
     assert(
-        &m_range == &other.m_range &&
-        "Comparing iterators to different ranges");
+        m_range == other.m_range && "Comparing iterators to different ranges");
 
-    bool const ret = m_chunk_index != other.m_chunk_index ||
-                     m_entity_index != other.m_entity_index;
+    bool const ret = m_pos != other.m_pos;
     return ret;
 }
 
-} // namespace recs
+} // namespace recs::naive
