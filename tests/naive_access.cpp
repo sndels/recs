@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include <recs/access.hpp>
+#include <recs/naive_access.hpp>
 
 namespace
 {
@@ -23,16 +23,18 @@ struct DamageSourceComponent
 
 using DamagedCharacterAccesses = recs::Access::Read<TransformComponent>::Write<
     HealthComponent>::With<CharacterComponent>;
-using DamagedCharacterEntity = DamagedCharacterAccesses::As<recs::Entity>;
-using DamagedCharacterQuery = DamagedCharacterAccesses::As<recs::Query>;
+using DamagedCharacterEntity =
+    DamagedCharacterAccesses::As<recs::naive::Entity>;
+using DamagedCharacterQuery = DamagedCharacterAccesses::As<recs::naive::Query>;
 using DamagedCharacterQueryIterator =
-    DamagedCharacterAccesses::As<recs::QueryIterator>;
+    DamagedCharacterAccesses::As<recs::naive::QueryIterator>;
 
 using DamageSourceAccesses =
     recs::Access::Read<DamageSourceComponent>::Read<TransformComponent>;
-using DamageSourceEntity = DamageSourceAccesses::As<recs::Entity>;
-using DamageSourceQuery = DamageSourceAccesses::As<recs::Query>;
-using DamageSourceQueryIterator = DamageSourceAccesses::As<recs::QueryIterator>;
+using DamageSourceEntity = DamageSourceAccesses::As<recs::naive::Entity>;
+using DamageSourceQuery = DamageSourceAccesses::As<recs::naive::Query>;
+using DamageSourceQueryIterator =
+    DamageSourceAccesses::As<recs::naive::QueryIterator>;
 
 } // namespace
 
@@ -67,9 +69,9 @@ static_assert(
     !recs::WithAccessesType<TransformComponent, HealthComponent>::contains<
         CharacterComponent>());
 
-TEST_CASE("Entity")
+TEST_CASE("naive::Entity")
 {
-    recs::ComponentStorage cs;
+    recs::naive::ComponentStorage cs;
 
     recs::EntityId const e0 = cs.addEntity();
     cs.addComponent(
@@ -82,8 +84,7 @@ TEST_CASE("Entity")
             });
     cs.addComponent(e0, CharacterComponent{});
 
-    recs::ChunkEntityRef ref = cs.getEntity(e0);
-    DamagedCharacterEntity dmg{ref};
+    DamagedCharacterEntity dmg{cs, e0};
     TransformComponent const &trfn = dmg.getComponent<TransformComponent>();
     REQUIRE(trfn.trfn[0] == 1.f);
     REQUIRE(trfn.trfn[1] == 2.f);
@@ -110,9 +111,9 @@ TEST_CASE("Entity")
     }
 }
 
-TEST_CASE("Query")
+TEST_CASE("naive::Query")
 {
-    recs::ComponentStorage cs;
+    recs::naive::ComponentStorage cs;
 
     recs::EntityId const e0 = cs.addEntity();
     cs.addComponent(

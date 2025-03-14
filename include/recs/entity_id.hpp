@@ -8,6 +8,11 @@ namespace recs
 
 class ComponentStorage;
 
+namespace naive
+{
+class ComponentStorage;
+}
+
 // NOTE:
 // This assumes a single ComponentStorage as entities from multiple storages can
 // be mixed up.
@@ -31,6 +36,7 @@ class EntityId
     }
 
     friend class ComponentStorage;
+    friend class naive::ComponentStorage;
 
   private:
     static uint64_t const s_invalid_id = 0xFFFF'FFFF'FFFF'FFFF;
