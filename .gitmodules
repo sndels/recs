@@ -1,3 +1,6 @@
 [submodule "ext/catch2"]
 	path = ext/catch2
 	url = https://github.com/catchorg/Catch2.git
+[submodule "ext/celero"]
+	path = ext/celero
+	url = https://github.com/DigitalInBlue/Celero.git
