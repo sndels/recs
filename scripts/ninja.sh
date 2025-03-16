@@ -11,13 +11,10 @@ err=$?
 cd build
 
 if [ "$err" -eq "0" ]; then
-ninja test
-err=$?
-fi
-
-if [ "$err" -eq "0" ]; then
-./test
+ninja $2
 err=$?
 fi
 
 cd ..
+
+exit $err

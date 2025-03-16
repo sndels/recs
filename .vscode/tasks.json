@@ -31,14 +31,11 @@
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "Make test (Debug)",
+            "label": "Ninja test (Debug)",
             "type": "shell",
-            "dependsOn": [
-                "cmake debug"
-            ],
-            "command": "make",
+            "command": "./scripts/ninja.sh",
             "args": [
-                "-j",
+                "Debug",
                 "test"
             ],
             "group": "build",
@@ -46,8 +43,37 @@
                 // Reveal the output only if unrecognized errors occur.
                 "reveal": "never"
             },
-            "options": {
-                "cwd": "${workspaceRoot}/build",
+            // Use the standard MS compiler pattern to detect errors, warnings and infos
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Ninja bench (Debug)",
+            "type": "shell",
+            "command": "./scripts/ninja.sh",
+            "args": [
+                "Debug",
+                "bench"
+            ],
+            "group": "build",
+            "presentation": {
+                // Reveal the output only if unrecognized errors occur.
+                "reveal": "never"
+            },
+            // Use the standard MS compiler pattern to detect errors, warnings and infos
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Ninja bench (RelWithDebInfo)",
+            "type": "shell",
+            "command": "./scripts/ninja.sh",
+            "args": [
+                "RelWithDebInfo",
+                "bench"
+            ],
+            "group": "build",
+            "presentation": {
+                // Reveal the output only if unrecognized errors occur.
+                "reveal": "never"
             },
             // Use the standard MS compiler pattern to detect errors, warnings and infos
             "problemMatcher": "$msCompile"
@@ -57,7 +83,7 @@
             "type": "shell",
             "command": "cmake",
             "args": [
-                "-DCMAKE_BUILD_TYPE=DEBUG",
+                "-DCMAKE_BUILD_TYPE=Debug",
                 "-B",
                 "build"
             ],
@@ -67,10 +93,11 @@
             }
         },
         {
-            "label": "cmake",
+            "label": "cmake release",
             "type": "shell",
             "command": "cmake",
             "args": [
+                "-DCMAKE_BUILD_TYPE=Release",
                 "-B",
                 "build",
             ],

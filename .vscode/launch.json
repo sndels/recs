@@ -17,13 +17,43 @@
             "preLaunchTask": "MSBuild test (Debug)"
         },
         {
+            "name": "MSbuild tests (Debug)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Debug/bench.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "internalConsole",
+            "preLaunchTask": "MSBuild bench (Debug)"
+        },
+        {
             "name": "gdb tests (Debug)",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/test",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "Make test (Debug)"
+            "preLaunchTask": "Ninja test (Debug)"
         },
+        {
+            "name": "gdb bench (Debug)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bench",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "Ninja bench (Debug)"
+        },
+        {
+            "name": "gdb bench (RelWithDebInfo)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bench",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "Ninja bench (RelWithDebInfo)"
+        }
     ]
 }
