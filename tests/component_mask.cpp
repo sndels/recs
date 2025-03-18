@@ -129,11 +129,11 @@ TEST_CASE("ComponentMask::set<T>/reset<T>")
     recs::ComponentMask mask1;
     recs::ComponentMask mask2;
     mask1.set<int>();
-    mask2.set<char>();
+    mask2.set<uint16_t>();
     REQUIRE(mask1.count_ones() == 1);
     REQUIRE(mask2.count_ones() == 1);
     REQUIRE(mask1 != mask2);
-    mask1.set<char>();
+    mask1.set<uint16_t>();
     mask2.set<int>();
     REQUIRE(mask1.count_ones() == 2);
     REQUIRE(mask2.count_ones() == 2);

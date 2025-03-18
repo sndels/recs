@@ -31,6 +31,10 @@ extern std::align_val_t
 
 template <typename T> uint64_t TypeId::get()
 {
+    static_assert(
+        sizeof(T) >= 2 || std::is_empty_v<T>,
+        "Component is too small. At least two bytes is expected "
+        "by chunk implementation");
     // Static init is required to be thread safe. runningTypeId is thread
     // safe in case multiple threads are initializing ids for different
     // component types.

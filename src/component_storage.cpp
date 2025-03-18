@@ -144,18 +144,22 @@ void ComponentStorage::removeEntity(EntityId id)
 EntitiesChunk::EntitiesChunk(ComponentMask const &mask)
 : m_mask{mask}
 {
+    assert(!mask.empty());
+
     size_t const componentCount = mask.count_ones();
     m_component_offsets = new size_t[componentCount];
     size_t offset = 0;
     size_t offset_i = 0;
+    bool non_zero_sized_component_found = false;
     for (size_t i = 0; i < TypeId::s_max_component_type_count; ++i)
     {
         if (mask.test(i))
         {
             // TODO:
             // Only go through components that are not empty tags?
-            size_t const data_size = g_component_sizes[i];
-            if (data_size == 0)
+            m_component_offsets[offset_i++] = offset;
+            size_t const component_size = g_component_sizes[i];
+            if (component_size == 0)
             {
                 m_component_offsets[offset_i++] = offset;
                 continue;
@@ -168,18 +172,29 @@ EntitiesChunk::EntitiesChunk(ComponentMask const &mask)
             offset = aligned_offset(offset, alignment);
 
             m_component_offsets[offset_i++] = offset;
-            offset += g_component_sizes[i] * s_max_entities;
+            offset += component_size * s_max_entities;
+            offset += offset % sizeof(std::max_align_t);
+            if (!non_zero_sized_component_found)
+            {
+                m_first_component_size = component_size;
+                non_zero_sized_component_found = true;
+            }
         }
     }
+    assert(non_zero_sized_component_found);
 
     m_data = new (s_base_alignment) uint8_t[offset];
+    HoleTag *front_tag = holeTag(0);
+    front_tag->skip_forward = static_cast<uint8_t>(s_max_entities);
+    front_tag->skip_backward = 1;
+    HoleTag *tail_tag = holeTag(s_max_entities - 1);
+    tail_tag->skip_forward = 1;
+    tail_tag->skip_backward = static_cast<uint8_t>(s_max_entities);
 
     m_index_freelist.reserve(s_max_entities);
     static_assert(s_max_entities - 1 < 0xFFFF'FFFF);
-    for (int32_t i = s_max_entities - 1; i >= 0; --i)
-    {
+    for (IndexT i = 0; i < static_cast<IndexT>(s_max_entities); ++i)
         m_index_freelist.push_back(static_cast<IndexT>(i));
-    }
 
     m_type_ids = mask.typeIds();
 }
@@ -245,6 +260,12 @@ void *EntitiesChunk::componentData(
     return ret;
 }
 
+HoleTag *EntitiesChunk::holeTag(IndexT index)
+{
+    size_t const offset = index * m_first_component_size;
+    return reinterpret_cast<HoleTag *>(m_data + offset);
+}
+
 bool ChunkEntityRef::isValid() const
 {
     return chunk != nullptr && entity_index < EntitiesChunk::s_max_entities;
@@ -272,6 +293,8 @@ ChunkEntityRef ComponentMaskEntities::allocate(EntityId id)
 {
     size_t chunk_index = 0;
     size_t const chunk_count = m_chunks.size();
+    // TODO:
+    // Should freelist be in this class instead of the individual chunks?
     for (; chunk_index < chunk_count; ++chunk_index)
     {
         EntitiesChunk const &chunk = *m_chunks[chunk_index];
@@ -287,6 +310,23 @@ ChunkEntityRef ComponentMaskEntities::allocate(EntityId id)
     chunk.m_index_freelist.pop_back();
     assert(chunk.m_ids[entity_index] == EntityId{});
     chunk.m_ids[entity_index] = id;
+
+    // Update hole tags
+    HoleTag *tag = chunk.holeTag(entity_index);
+    // We assume this is at the end of the hole
+    assert(tag->skip_forward == 1);
+    if (tag->skip_backward > 1)
+    {
+        HoleTag *front_tag =
+            chunk.holeTag(entity_index - tag->skip_backward + 1);
+        front_tag->skip_forward--;
+        if (tag->skip_backward > 2)
+        {
+            HoleTag *tail_tag = chunk.holeTag(entity_index - 1);
+            tail_tag->skip_forward = 1;
+            tail_tag->skip_backward = tag->skip_backward - 1;
+        }
+    }
 
     return ChunkEntityRef{
         .chunk = &chunk,
@@ -319,7 +359,67 @@ void ComponentMaskEntities::destroy(EntityId id)
     // TODO:
     // memset component data to a pattern in debug?
     ref.chunk->m_ids[ref.entity_index] = EntityId{};
-    ref.chunk->m_index_freelist.push_back(ref.entity_index);
+    // Keep freelist sorted to guarantee allocate only pops indices at the end
+    // of a hole
+    // TODO:
+    // This is expensive and gets prohibitively so if the freelist is moved to
+    // ComponentMaskEntities as a list of ChunkRefs. Binary search will help
+    // somewhat but it could still get really bad when a lot of entities are
+    // free? What if a chunk has less entities and we just update all of the
+    // tags in the holes we split when reallocating arbitrary indices?
+    {
+        auto it = ref.chunk->m_index_freelist.begin();
+        for (; it != ref.chunk->m_index_freelist.end(); ++it)
+        {
+            if (*it > ref.entity_index)
+                break;
+            assert(*it != ref.entity_index);
+        }
+        ref.chunk->m_index_freelist.insert(it, ref.entity_index);
+    }
+
+    // Update hole tags
+    HoleTag *tag = ref.chunk->holeTag(ref.entity_index);
+    HoleTag *front_tag = tag;
+    if (ref.entity_index > 0)
+    {
+        EntityId prev_id = ref.chunk->m_ids[ref.entity_index - 1];
+        if (prev_id == EntityId{})
+        {
+            front_tag = ref.chunk->holeTag(ref.entity_index - 1);
+            assert(front_tag->skip_forward == 1);
+            if (front_tag->skip_backward > 1)
+                front_tag = ref.chunk->holeTag(
+                    ref.entity_index - front_tag->skip_backward + 1);
+        }
+    }
+
+    HoleTag *tail_tag = tag;
+    if (ref.entity_index < EntitiesChunk::s_max_entities - 1)
+    {
+        EntityId next_id = ref.chunk->m_ids[ref.entity_index + 1];
+        if (next_id == EntityId{})
+        {
+            tail_tag = ref.chunk->holeTag(ref.entity_index + 1);
+            assert(tail_tag->skip_backward == 1);
+            if (tail_tag->skip_forward > 1)
+                tail_tag = ref.chunk->holeTag(
+                    ref.entity_index + front_tag->skip_forward - 1);
+        }
+    }
+
+    if (front_tag != tail_tag)
+    {
+        uint8_t const hole_size = (tail_tag - front_tag) + 1;
+        front_tag->skip_forward = hole_size;
+        tail_tag->skip_backward = hole_size;
+    }
+    else
+    {
+        assert(tag == front_tag);
+        tag->skip_forward = 1;
+        tag->skip_backward = 1;
+    }
 }
 
 } // namespace recs

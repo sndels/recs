@@ -13,6 +13,11 @@ namespace naive
 class ComponentStorage;
 }
 
+namespace tests
+{
+struct EntityIdCreator;
+}
+
 // NOTE:
 // This assumes a single ComponentStorage as entities from multiple storages can
 // be mixed up.
@@ -37,6 +42,9 @@ class EntityId
 
     friend class ComponentStorage;
     friend class naive::ComponentStorage;
+    // This is a dirty hack to make chunk tests workable without the full
+    // storage implementation
+    friend struct tests::EntityIdCreator;
 
   private:
     static uint64_t const s_invalid_id = 0xFFFF'FFFF'FFFF'FFFF;

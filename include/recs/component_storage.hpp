@@ -105,8 +105,17 @@ class ComponentStorage
     std::vector<ChunkEntityRef> m_entity_refs;
 };
 
+struct HoleTag
+{
+    uint16_t skip_forward : 8;
+    uint16_t skip_backward : 8;
+};
+// This matches the minimum component type size in type_id.hpp
+static_assert(sizeof(HoleTag) == 2);
+
 struct EntitiesChunk
 {
+    // max-1 must fit hole tag fields
     static constexpr size_t s_max_entities = 128;
     // Cache line alignment on most architectures
     static constexpr std::align_val_t s_base_alignment{128};
@@ -114,6 +123,7 @@ struct EntitiesChunk
     static_assert(s_max_entities <= static_cast<IndexT>(0xFFFF'FFFF'FFFF'FFFF));
 
     ComponentMask m_mask;
+    size_t m_first_component_size{0};
     size_t *m_component_offsets{nullptr};
     // Storage for all components that are in m_mask. Each component type is
     // stored in a separate block, ordered according to the component bits.
@@ -136,6 +146,7 @@ struct EntitiesChunk
         requires(ValidComponent<T> && !std::is_empty_v<T>)
     [[nodiscard]] T &getComponent(IndexT index);
     void *componentData(uint64_t type_index, IndexT entity_index) const;
+    HoleTag *holeTag(IndexT index);
 };
 
 struct ChunkEntityRef

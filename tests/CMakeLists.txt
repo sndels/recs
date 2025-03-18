@@ -1,6 +1,7 @@
 set(TESTS_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/access.cpp
     ${CMAKE_CURRENT_LIST_DIR}/component_mask.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/component_mask_entities.cpp
     ${CMAKE_CURRENT_LIST_DIR}/component_storage.cpp
     ${CMAKE_CURRENT_LIST_DIR}/naive_access.cpp
     ${CMAKE_CURRENT_LIST_DIR}/naive_component_storage.cpp
