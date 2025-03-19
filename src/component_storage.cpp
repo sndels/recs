@@ -90,18 +90,18 @@ ComponentStorage::Range ComponentStorage::getEntities(ComponentMask const &mask)
         // New query, find all matching archetypes
         for (auto iter = m_storage.begin(); iter != m_storage.end(); ++iter)
         {
-            if (iter->first.test_any(mask))
+            if (iter->first.test_all(mask))
                 iters.emplace_back(iter);
         }
-        m_mask_entitites[mask] = iters;
+        m_mask_entitites.emplace(mask, iters);
     }
 
     std::vector<EntitiesChunk *> chunks;
     auto &entities = m_mask_entitites[mask];
     for (auto &cme : entities)
     {
-        for (EntitiesChunk &ec : cme->second.m_chunks)
-            chunks.push_back(&ec);
+        for (EntitiesChunk *ec : cme->second.m_chunks)
+            chunks.push_back(ec);
     }
 
     return Range{*this, std::move(chunks)};
@@ -249,21 +249,28 @@ ComponentMaskEntities::ComponentMaskEntities(ComponentMask const &mask)
 {
 }
 
+ComponentMaskEntities::~ComponentMaskEntities()
+{
+    for (EntitiesChunk *c : m_chunks)
+        delete c;
+    m_chunks.clear();
+}
+
 ChunkEntityRef ComponentMaskEntities::allocate(EntityId id)
 {
     size_t chunk_index = 0;
     size_t const chunk_count = m_chunks.size();
     for (; chunk_index < chunk_count; ++chunk_index)
     {
-        EntitiesChunk const &chunk = m_chunks[chunk_index];
+        EntitiesChunk const &chunk = *m_chunks[chunk_index];
         if (!chunk.m_index_freelist.empty())
             break;
     }
 
     if (chunk_index == chunk_count)
-        m_chunks.emplace_back(m_mask);
+        m_chunks.emplace_back(new EntitiesChunk{m_mask});
 
-    EntitiesChunk &chunk = m_chunks[chunk_index];
+    EntitiesChunk &chunk = *m_chunks[chunk_index];
     EntitiesChunk::IndexT const entity_index = chunk.m_index_freelist.back();
     chunk.m_index_freelist.pop_back();
     assert(chunk.m_ids[entity_index] == EntityId{});
@@ -282,7 +289,7 @@ ChunkEntityRef ComponentMaskEntities::find(EntityId id)
     size_t const chunk_count = m_chunks.size();
     for (size_t chunk_index = 0; chunk_index < chunk_count; ++chunk_index)
     {
-        EntitiesChunk &chunk = m_chunks[chunk_index];
+        EntitiesChunk &chunk = *m_chunks[chunk_index];
         EntitiesChunk::IndexT const entity_index = chunk.index(id);
         if (entity_index < EntitiesChunk::s_max_entities)
             return ChunkEntityRef{

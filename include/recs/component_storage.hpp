@@ -142,7 +142,7 @@ struct ChunkEntityRef
 struct ComponentMaskEntities
 {
     ComponentMaskEntities(ComponentMask const &mask);
-    ~ComponentMaskEntities() = default;
+    ~ComponentMaskEntities();
 
     ComponentMaskEntities(ComponentMaskEntities const &) = delete;
     ComponentMaskEntities(ComponentMaskEntities &&) = delete;
@@ -158,7 +158,7 @@ struct ComponentMaskEntities
     [[nodiscard]] T &getComponent(EntityId id) const;
 
     ComponentMask m_mask;
-    std::vector<EntitiesChunk> m_chunks;
+    std::vector<EntitiesChunk *> m_chunks;
 };
 
 template <typename T>
@@ -179,7 +179,7 @@ template <typename T>
     size_t const chunk_count = m_chunks.size();
     for (size_t chunk_index = 0; chunk_index < chunk_count; ++chunk_index)
     {
-        EntitiesChunk const &chunk = m_chunks[chunk_index];
+        EntitiesChunk const &chunk = *m_chunks[chunk_index];
         EntitiesChunk::IndexT const entity_index = chunk.index(id);
         if (entity_index < EntitiesChunk::s_max_entities)
             return chunk.getComponent<T>(entity_index);
@@ -203,16 +203,7 @@ void ComponentStorage::addComponent(EntityId id, T const &c)
     m_entity_component_masks[entity_index] = new_mask;
 
     if (!m_storage.contains(new_mask))
-    {
-        auto iter = m_storage.try_emplace(new_mask, new_mask).first;
-        // Fill already used submasks with the new one
-        for (auto &[other_mask, iters] : m_mask_entitites)
-        {
-            if (other_mask.test_any(new_mask))
-                iters.emplace_back(iter);
-        }
-        m_mask_entitites.emplace(new_mask, std::vector{iter});
-    }
+        m_storage.emplace(new_mask, new_mask);
 
     ComponentMaskEntities &new_storage = m_storage.at(new_mask);
     ChunkEntityRef const new_allocation = new_storage.allocate(id);
@@ -291,16 +282,7 @@ void ComponentStorage::removeComponent(EntityId id)
     m_entity_component_masks[entity_index] = new_mask;
 
     if (!m_storage.contains(new_mask))
-    {
-        auto iter = m_storage.try_emplace(new_mask, new_mask).first;
-        // Fill already used submasks with the new one
-        for (auto &[other_mask, iters] : m_mask_entitites)
-        {
-            if (other_mask.test_any(new_mask))
-                iters.emplace_back(iter);
-        }
-        m_mask_entitites.emplace(new_mask, std::vector{iter});
-    }
+        m_storage.emplace(new_mask, new_mask);
 
     ComponentMaskEntities &old_storage = m_storage.at(old_mask);
     ChunkEntityRef const old_allocation = old_storage.find(id);
