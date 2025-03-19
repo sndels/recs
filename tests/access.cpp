@@ -80,7 +80,7 @@ TEST_CASE("Entity")
         e0, HealthComponent{
                 .health = 99.f,
             });
-    cs.addComponent(e0, CharacterComponent{});
+    cs.addTagComponent<CharacterComponent>(e0);
 
     recs::ChunkEntityRef ref = cs.getEntity(e0);
     DamagedCharacterEntity dmg{ref};

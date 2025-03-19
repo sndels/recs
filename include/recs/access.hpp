@@ -23,11 +23,11 @@ class Entity
     Entity &operator=(Entity const &) = default;
 
     template <typename T>
-        requires(Contains<ReadAccesses, T>)
+        requires(Contains<ReadAccesses, T> && !std::is_empty_v<T>)
     [[nodiscard]] T const &getComponent() const;
 
     template <typename T>
-        requires(Contains<WriteAccesses, T>)
+        requires(Contains<WriteAccesses, T> && !std::is_empty_v<T>)
     [[nodiscard]] T &getComponent() const;
 
     [[nodiscard]] static ComponentMask accessMask()
@@ -155,7 +155,7 @@ Entity<ReadAccesses, WriteAccesses, WithAccesses>::Entity(ChunkEntityRef ref)
 
 template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
 template <typename T>
-    requires(Contains<ReadAccesses, T>)
+    requires(Contains<ReadAccesses, T> && !std::is_empty_v<T>)
 T const &Entity<ReadAccesses, WriteAccesses, WithAccesses>::getComponent() const
 {
     assert(m_chunk_ref.isValid());
@@ -164,7 +164,7 @@ T const &Entity<ReadAccesses, WriteAccesses, WithAccesses>::getComponent() const
 
 template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
 template <typename T>
-    requires(Contains<WriteAccesses, T>)
+    requires(Contains<WriteAccesses, T> && !std::is_empty_v<T>)
 T &Entity<ReadAccesses, WriteAccesses, WithAccesses>::getComponent() const
 {
     assert(m_chunk_ref.isValid());

@@ -66,8 +66,11 @@ class ComponentStorage
     void removeEntity(EntityId id);
 
     template <typename T>
-        requires ValidComponent<T>
+        requires(ValidComponent<T> && !std::is_empty_v<T>)
     void addComponent(EntityId id, T const &c);
+    template <typename T>
+        requires(ValidComponent<T> && std::is_empty_v<T>)
+    void addTagComponent(EntityId id);
 
     template <typename T>
         requires ValidComponent<T>
@@ -77,7 +80,7 @@ class ComponentStorage
     [[nodiscard]] bool hasComponents(EntityId id) const;
 
     template <typename T>
-        requires ValidComponent<T>
+        requires(ValidComponent<T> && !std::is_empty_v<T>)
     [[nodiscard]] T &getComponent(EntityId id);
 
     template <typename T>
@@ -85,6 +88,10 @@ class ComponentStorage
     void removeComponent(EntityId id);
 
   private:
+    template <typename T>
+        requires ValidComponent<T>
+    ChunkEntityRef addComponentInternal(EntityId id);
+
     std::unordered_map<ComponentMask, ComponentMaskEntities> m_storage;
     std::unordered_map<
         ComponentMask, std::vector<decltype(m_storage)::iterator>>
@@ -126,7 +133,7 @@ struct EntitiesChunk
     [[nodiscard]] IndexT index(EntityId id) const;
 
     template <typename T>
-        requires ValidComponent<T>
+        requires(ValidComponent<T> && !std::is_empty_v<T>)
     [[nodiscard]] T &getComponent(IndexT index);
     void *componentData(uint64_t type_index, IndexT entity_index) const;
 };
@@ -155,7 +162,7 @@ struct ComponentMaskEntities
     void destroy(EntityId id);
 
     template <typename T>
-        requires ValidComponent<T>
+        requires(ValidComponent<T> && !std::is_empty_v<T>)
     [[nodiscard]] T &getComponent(EntityId id) const;
 
     ComponentMask m_mask;
@@ -163,7 +170,7 @@ struct ComponentMaskEntities
 };
 
 template <typename T>
-    requires ValidComponent<T>
+    requires(ValidComponent<T> && !std::is_empty_v<T>)
 T &EntitiesChunk::getComponent(IndexT entity_index)
 {
     T *ret =
@@ -172,7 +179,7 @@ T &EntitiesChunk::getComponent(IndexT entity_index)
 }
 
 template <typename T>
-    requires ValidComponent<T>
+    requires(ValidComponent<T> && !std::is_empty_v<T>)
 [[nodiscard]] T &ComponentMaskEntities::getComponent(EntityId id) const
 {
     // TODO:
@@ -190,45 +197,18 @@ template <typename T>
 }
 
 template <typename T>
-    requires ValidComponent<T>
+    requires(ValidComponent<T> && !std::is_empty_v<T>)
 void ComponentStorage::addComponent(EntityId id, T const &c)
 {
-    assert(isValid(id));
-    uint64_t const entity_index = id.index();
-
-    ComponentMask old_mask = m_entity_component_masks[entity_index];
-    assert(!old_mask.test<T>() && "The entity already has this component");
-
-    ComponentMask new_mask = old_mask;
-    new_mask.set<T>();
-    m_entity_component_masks[entity_index] = new_mask;
-
-    if (!m_storage.contains(new_mask))
-        m_storage.emplace(new_mask, new_mask);
-
-    ComponentMaskEntities &new_storage = m_storage.at(new_mask);
-    ChunkEntityRef const new_allocation = new_storage.allocate(id);
-    if (!old_mask.empty())
-    {
-        assert(m_storage.contains(old_mask));
-
-        ComponentMaskEntities &old_storage = m_storage.at(old_mask);
-        ChunkEntityRef const old_allocation = old_storage.find(id);
-
-        for (uint64_t const type_index : old_allocation.chunk->m_type_ids)
-        {
-            void *old_data = old_allocation.chunk->componentData(
-                type_index, old_allocation.entity_index);
-            void *new_data = new_allocation.chunk->componentData(
-                type_index, new_allocation.entity_index);
-            size_t const data_size = g_component_sizes[type_index];
-            memcpy(new_data, old_data, data_size);
-        }
-        old_storage.destroy(id);
-    }
+    ChunkEntityRef const new_allocation = addComponentInternal<T>(id);
     new_allocation.chunk->getComponent<T>(new_allocation.entity_index) = c;
+}
 
-    m_entity_refs[entity_index] = new_allocation;
+template <typename T>
+    requires(ValidComponent<T> && std::is_empty_v<T>)
+void ComponentStorage::addTagComponent(EntityId id)
+{
+    (void)addComponentInternal<T>(id);
 }
 
 template <typename T>
@@ -253,7 +233,7 @@ bool ComponentStorage::hasComponents(EntityId id) const
 }
 
 template <typename T>
-    requires ValidComponent<T>
+    requires(ValidComponent<T> && !std::is_empty_v<T>)
 T &ComponentStorage::getComponent(EntityId id)
 {
     assert(isValid(id));
@@ -304,11 +284,55 @@ void ComponentStorage::removeComponent(EntityId id)
             void *new_data = new_allocation.chunk->componentData(
                 type_index, new_allocation.entity_index);
             size_t const data_size = g_component_sizes[type_index];
-            memcpy(new_data, old_data, data_size);
+            if (data_size > 0)
+                memcpy(new_data, old_data, data_size);
         }
     }
 
     old_storage.destroy(id);
+}
+
+template <typename T>
+    requires ValidComponent<T>
+ChunkEntityRef ComponentStorage::addComponentInternal(EntityId id)
+{
+    assert(isValid(id));
+    uint64_t const entity_index = id.index();
+
+    ComponentMask old_mask = m_entity_component_masks[entity_index];
+    assert(!old_mask.test<T>() && "The entity already has this component");
+
+    ComponentMask new_mask = old_mask;
+    new_mask.set<T>();
+    m_entity_component_masks[entity_index] = new_mask;
+
+    if (!m_storage.contains(new_mask))
+        m_storage.emplace(new_mask, new_mask);
+
+    ComponentMaskEntities &new_storage = m_storage.at(new_mask);
+    ChunkEntityRef const new_allocation = new_storage.allocate(id);
+    if (!old_mask.empty())
+    {
+        assert(m_storage.contains(old_mask));
+
+        ComponentMaskEntities &old_storage = m_storage.at(old_mask);
+        ChunkEntityRef const old_allocation = old_storage.find(id);
+
+        for (uint64_t const type_index : old_allocation.chunk->m_type_ids)
+        {
+            void *old_data = old_allocation.chunk->componentData(
+                type_index, old_allocation.entity_index);
+            void *new_data = new_allocation.chunk->componentData(
+                type_index, new_allocation.entity_index);
+            size_t const data_size = g_component_sizes[type_index];
+            if (data_size > 0)
+                memcpy(new_data, old_data, data_size);
+        }
+        old_storage.destroy(id);
+    }
+
+    m_entity_refs[entity_index] = new_allocation;
+    return new_allocation;
 }
 
 } // namespace recs

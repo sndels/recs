@@ -152,6 +152,15 @@ EntitiesChunk::EntitiesChunk(ComponentMask const &mask)
     {
         if (mask.test(i))
         {
+            // TODO:
+            // Only go through components that are not empty tags?
+            size_t const data_size = g_component_sizes[i];
+            if (data_size == 0)
+            {
+                m_component_offsets[offset_i++] = offset;
+                continue;
+            }
+
             std::align_val_t const alignment = g_component_alignments[i];
             // We assume that we can pre-align offsets without knowing the
             // actual address we get
@@ -230,6 +239,8 @@ void *EntitiesChunk::componentData(
     size_t const component_index = m_mask.count_ones_left_of(type_index);
     size_t const offset = m_component_offsets[component_index];
     size_t const component_size = g_component_sizes[type_index];
+    assert(component_size > 0 && "Can't query component data for empty types");
+
     uint8_t *ret = m_data + offset + entity_index * component_size;
     return ret;
 }

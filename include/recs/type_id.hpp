@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <new>
+#include <type_traits>
 
 namespace recs
 {
@@ -36,7 +37,7 @@ template <typename T> uint64_t TypeId::get()
     static uint64_t const id = []
     {
         uint64_t const _id = runningTypeId();
-        g_component_sizes[_id] = sizeof(T);
+        g_component_sizes[_id] = std::is_empty_v<T> ? 0 : sizeof(T);
         g_component_alignments[_id] = std::align_val_t{alignof(T)};
         return _id;
     }();
