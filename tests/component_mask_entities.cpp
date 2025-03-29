@@ -54,7 +54,7 @@ TEST_CASE("ComponentMaskEntities")
 
     recs::ComponentMask multiple_mask;
     multiple_mask.set<int64_t>();
-    multiple_mask.set<int16_t>();
+    multiple_mask.set<int32_t>();
     recs::ComponentMaskEntities multiple_storage(multiple_mask);
 
     std::vector<recs::EntityId> ids;
