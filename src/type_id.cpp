@@ -20,5 +20,6 @@ uint64_t TypeId::runningTypeId()
 }
 
 size_t g_component_sizes[TypeId::s_max_component_type_count];
+std::align_val_t g_component_alignments[TypeId::s_max_component_type_count];
 
 } // namespace recs

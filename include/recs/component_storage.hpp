@@ -289,10 +289,11 @@ struct EntitiesChunk
     static_assert(s_max_entities <= static_cast<IndexT>(0xFFFF'FFFF'FFFF'FFFF));
 
     ComponentMask m_mask;
-    size_t *m_component_offsets;
+    std::align_val_t m_first_component_alignment{0};
+    size_t *m_component_offsets{nullptr};
     // Storage for all components that are in m_mask. Each component type is
     // stored in a separate block, ordered according to the component bits.
-    uint8_t *m_data;
+    uint8_t *m_data{nullptr};
     std::array<EntityId, s_max_entities> m_ids;
     std::vector<IndexT> m_index_freelist;
     std::vector<uint64_t> m_type_ids;

@@ -15,6 +15,11 @@ struct DataI
     int i{0};
 };
 
+struct alignas(32) Aligned
+{
+    float x;
+};
+
 } // namespace
 
 TEST_CASE("ComponentStorage")
@@ -30,6 +35,18 @@ TEST_CASE("ComponentStorage")
     REQUIRE(ecs.isValid(e1));
     e0 = ecs.addEntity();
     REQUIRE(ecs.isValid(e0));
+
+    // Storage alignment
+    ecs.addComponent(e0, (uint16_t)1);
+    REQUIRE(
+        ((uintptr_t)&ecs.getComponent<uint16_t>(e0)) % alignof(uint16_t) == 0);
+    ecs.addComponent(e0, Aligned{});
+    REQUIRE(
+        ((uintptr_t)&ecs.getComponent<uint16_t>(e0)) % alignof(uint16_t) == 0);
+    REQUIRE(
+        ((uintptr_t)&ecs.getComponent<Aligned>(e0)) % alignof(Aligned) == 0);
+    ecs.removeComponent<uint16_t>(e0);
+    ecs.removeComponent<Aligned>(e0);
 
     ecs.addComponent(e0, DataF{1.f});
     REQUIRE(ecs.hasComponent<DataF>(e0));

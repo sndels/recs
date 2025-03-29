@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <new>
 
 namespace recs
 {
@@ -24,6 +25,8 @@ class TypeId
 };
 
 extern size_t g_component_sizes[TypeId::s_max_component_type_count];
+extern std::align_val_t
+    g_component_alignments[TypeId::s_max_component_type_count];
 
 template <typename T> uint64_t TypeId::get()
 {
@@ -34,6 +37,7 @@ template <typename T> uint64_t TypeId::get()
     {
         uint64_t const _id = runningTypeId();
         g_component_sizes[_id] = sizeof(T);
+        g_component_alignments[_id] = std::align_val_t{alignof(T)};
         return _id;
     }();
     return id;
