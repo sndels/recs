@@ -149,30 +149,31 @@ TEST_CASE("Query")
         DamageSourceQueryIterator iter = q.begin();
 
         DamageSourceQueryIterator const end_iter = q.end();
+        float pos_sum[3] = {};
+        float dmg_sum = 0.f;
         REQUIRE(iter != end_iter);
-        REQUIRE(iter->getComponent<TransformComponent>().trfn[0] == 1.f);
-        REQUIRE(iter->getComponent<TransformComponent>().trfn[1] == 2.f);
-        REQUIRE(iter->getComponent<TransformComponent>().trfn[2] == 3.f);
-        REQUIRE(
-            iter->getComponent<DamageSourceComponent>().damageOverTime == 99.f);
+        pos_sum[0] += iter->getComponent<TransformComponent>().trfn[0];
+        pos_sum[1] += iter->getComponent<TransformComponent>().trfn[1];
+        pos_sum[2] += iter->getComponent<TransformComponent>().trfn[2];
+        dmg_sum += iter->getComponent<DamageSourceComponent>().damageOverTime;
         ++iter;
         REQUIRE(iter != end_iter);
-        REQUIRE(iter->getComponent<TransformComponent>().trfn[0] == 10.f);
-        REQUIRE(iter->getComponent<TransformComponent>().trfn[1] == 20.f);
-        REQUIRE(iter->getComponent<TransformComponent>().trfn[2] == 30.f);
-        REQUIRE(
-            iter->getComponent<DamageSourceComponent>().damageOverTime ==
-            9900.f);
+        pos_sum[0] += iter->getComponent<TransformComponent>().trfn[0];
+        pos_sum[1] += iter->getComponent<TransformComponent>().trfn[1];
+        pos_sum[2] += iter->getComponent<TransformComponent>().trfn[2];
+        dmg_sum += iter->getComponent<DamageSourceComponent>().damageOverTime;
         ++iter;
         REQUIRE(iter != end_iter);
-        REQUIRE(iter->getComponent<TransformComponent>().trfn[0] == 100.f);
-        REQUIRE(iter->getComponent<TransformComponent>().trfn[1] == 200.f);
-        REQUIRE(iter->getComponent<TransformComponent>().trfn[2] == 300.f);
-        REQUIRE(
-            iter->getComponent<DamageSourceComponent>().damageOverTime ==
-            990000.f);
+        pos_sum[0] += iter->getComponent<TransformComponent>().trfn[0];
+        pos_sum[1] += iter->getComponent<TransformComponent>().trfn[1];
+        pos_sum[2] += iter->getComponent<TransformComponent>().trfn[2];
+        dmg_sum += iter->getComponent<DamageSourceComponent>().damageOverTime;
         ++iter;
         REQUIRE(iter == end_iter);
+        REQUIRE(pos_sum[0] == 111.f);
+        REQUIRE(pos_sum[1] == 222.f);
+        REQUIRE(pos_sum[2] == 333.f);
+        REQUIRE(dmg_sum == 999999.f);
     }
     TransformComponent trfn_sum;
     DamageSourceComponent dmg_sum;

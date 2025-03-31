@@ -172,7 +172,6 @@ EntitiesChunk::EntitiesChunk(ComponentMask const &mask)
 
         m_component_offsets[offset_i++] = offset;
         offset += component_size * s_max_entities;
-        offset += offset % sizeof(std::max_align_t);
         if (!non_zero_sized_component_found)
         {
             m_first_component_size = component_size;
@@ -313,17 +312,25 @@ ChunkEntityRef ComponentMaskEntities::allocate(EntityId id)
     assert(tag->skip_forward == 1);
     if (tag->skip_backward > 1)
     {
+        assert(entity_index >= tag->skip_backward - 1);
         EntitiesChunk::IndexT const front_index =
-            entity_index - tag->skip_backward + 1;
+            entity_index - (tag->skip_backward - 1);
         HoleTag *front_tag = chunk.holeTag(front_index);
+        assert(front_tag->skip_backward == 1);
         front_tag->skip_forward--;
+
+        HoleTag *tail_tag = front_tag;
+        EntitiesChunk::IndexT tail_index = front_index;
         if (tag->skip_backward > 2)
         {
-            EntitiesChunk::IndexT const tail_index = entity_index - 1;
-            HoleTag *tail_tag = chunk.holeTag(tail_index);
+            tail_index = entity_index - 1;
+            tail_tag = chunk.holeTag(tail_index);
             tail_tag->skip_forward = 1;
             tail_tag->skip_backward = tag->skip_backward - 1;
         }
+
+        assert(front_tag->skip_forward == tail_tag->skip_backward);
+        assert(front_tag->skip_forward == tail_index - front_index + 1);
     }
 
     return ChunkEntityRef{
@@ -399,7 +406,9 @@ void ComponentMaskEntities::destroy(EntityId id)
             assert(front_tag->skip_forward == 1);
             if (front_tag->skip_backward > 1)
             {
-                front_index = front_index - front_tag->skip_backward + 1;
+                assert(front_index < EntitiesChunk::s_max_entities);
+                assert(front_index >= front_tag->skip_backward - 1);
+                front_index = front_index - (front_tag->skip_backward - 1);
                 front_tag = ref.chunk->holeTag(front_index);
                 assert(front_tag->skip_backward == 1);
             }
@@ -418,6 +427,10 @@ void ComponentMaskEntities::destroy(EntityId id)
             assert(tail_tag->skip_backward == 1);
             if (tail_tag->skip_forward > 1)
             {
+                assert(tail_index < EntitiesChunk::s_max_entities);
+                assert(
+                    EntitiesChunk::s_max_entities - tail_index >=
+                    tail_tag->skip_forward - 1);
                 tail_index = tail_index + tail_tag->skip_forward - 1;
                 tail_tag = ref.chunk->holeTag(tail_index);
                 assert(tail_tag->skip_forward == 1);
@@ -427,12 +440,11 @@ void ComponentMaskEntities::destroy(EntityId id)
 
     if (front_tag != tail_tag)
     {
-        assert(front_tag < tail_tag);
-        assert(front_tag->skip_backward != 0);
-        assert(tail_tag->skip_forward != 0);
-        uint8_t const hole_size = (tail_index - front_index) + 1;
-        front_tag->skip_forward = hole_size;
-        tail_tag->skip_backward = hole_size;
+        uint8_t const jump_length = (tail_index - front_index) + 1;
+        front_tag->skip_forward = jump_length;
+        front_tag->skip_backward = 1;
+        tail_tag->skip_forward = 1;
+        tail_tag->skip_backward = jump_length;
     }
 }
 
