@@ -146,28 +146,25 @@ EntitiesChunk::EntitiesChunk(ComponentMask const &mask)
 {
     assert(!mask.empty());
 
+    m_type_ids = mask.typeIds();
+
     size_t const componentCount = mask.count_ones();
     m_component_offsets = new size_t[componentCount];
     size_t offset = 0;
     size_t offset_i = 0;
     bool non_zero_sized_component_found = false;
-    // TODO:
-    // Cache the component type indices in ComponentMaskEntities?
-    for (size_t i = 0; i < TypeId::s_max_component_type_count; ++i)
+    for (size_t id : m_type_ids)
     {
-        if (!mask.test(i))
-            continue;
-
         // TODO:
         // Only go through components that are not empty tags?
-        size_t const component_size = g_component_sizes[i];
+        size_t const component_size = g_component_sizes[id];
         if (component_size == 0)
         {
             m_component_offsets[offset_i++] = offset;
             continue;
         }
 
-        std::align_val_t const alignment = g_component_alignments[i];
+        std::align_val_t const alignment = g_component_alignments[id];
         // We assume that we can pre-align offsets without knowing the
         // actual address we get
         assert(alignment <= s_base_alignment);
@@ -196,8 +193,6 @@ EntitiesChunk::EntitiesChunk(ComponentMask const &mask)
     static_assert(s_max_entities - 1 < 0xFFFF'FFFF);
     for (IndexT i = 0; i < static_cast<IndexT>(s_max_entities); ++i)
         m_index_freelist.push_back(static_cast<IndexT>(i));
-
-    m_type_ids = mask.typeIds();
 }
 
 EntitiesChunk::~EntitiesChunk()
@@ -360,14 +355,10 @@ void ComponentMaskEntities::destroy(EntityId id)
     ChunkEntityRef const ref = find(id);
     assert(ref.isValid());
 #ifndef _NDEBUG
-    // TODO:
-    // Cache the set indices? EntitiesChunk ctor also uses them
-    for (size_t i = 0; i < TypeId::s_max_component_type_count; ++i)
+    for (size_t id : ref.chunk->m_type_ids)
     {
-        if (!m_mask.test(i))
-            continue;
-        void *ptr = ref.chunk->componentData(i, ref.entity_index);
-        size_t const size = g_component_sizes[i];
+        void *ptr = ref.chunk->componentData(id, ref.entity_index);
+        size_t const size = g_component_sizes[id];
         memset(ptr, 0xCD, size);
     }
 #endif // !_NDEBUG
