@@ -184,14 +184,6 @@ QueryIterator<ReadAccesses, WriteAccesses, WithAccesses>::QueryIterator(
         EntitiesChunk const *chunk = m_range.m_chunks[m_chunk_index];
         if (chunk->m_ids[m_entity_index] == EntityId{})
             ++(*this);
-        if (m_chunk_index < range.m_chunks.size() ||
-            m_entity_index < EntitiesChunk::s_max_entities)
-        {
-            m_current_entity = EntityType{ChunkEntityRef{
-                .chunk = m_range.m_chunks[m_chunk_index],
-                .entity_index = entity_index,
-            }};
-        }
     }
 }
 
@@ -215,7 +207,7 @@ QueryIterator<ReadAccesses, WriteAccesses, WithAccesses> &QueryIterator<
             break;
     }
     if (m_chunk_index < chunk_count)
-        m_current_entity = m_current_entity = EntityType{ChunkEntityRef{
+        m_current_entity = EntityType{ChunkEntityRef{
             .chunk = m_range.m_chunks[m_chunk_index],
             .entity_index = m_entity_index,
         }};
