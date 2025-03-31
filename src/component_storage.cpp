@@ -151,6 +151,8 @@ EntitiesChunk::EntitiesChunk(ComponentMask const &mask)
     size_t offset = 0;
     size_t offset_i = 0;
     bool non_zero_sized_component_found = false;
+    // TODO:
+    // Cache the component type indices in ComponentMaskEntities?
     for (size_t i = 0; i < TypeId::s_max_component_type_count; ++i)
     {
         if (!mask.test(i))
@@ -357,8 +359,18 @@ void ComponentMaskEntities::destroy(EntityId id)
 {
     ChunkEntityRef const ref = find(id);
     assert(ref.isValid());
+#ifndef _NDEBUG
     // TODO:
-    // memset component data to a pattern in debug?
+    // Cache the set indices? EntitiesChunk ctor also uses them
+    for (size_t i = 0; i < TypeId::s_max_component_type_count; ++i)
+    {
+        if (!m_mask.test(i))
+            continue;
+        void *ptr = ref.chunk->componentData(i, ref.entity_index);
+        size_t const size = g_component_sizes[i];
+        memset(ptr, 0xCD, size);
+    }
+#endif // !_NDEBUG
     ref.chunk->m_ids[ref.entity_index] = EntityId{};
     // Keep freelist sorted to guarantee allocate only pops indices at the end
     // of a hole
