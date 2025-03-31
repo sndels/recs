@@ -40,11 +40,17 @@ TEST_CASE("ComponentStorage")
     ecs.addComponent(e0, (uint16_t)1);
     REQUIRE(
         ((uintptr_t)&ecs.getComponent<uint16_t>(e0)) % alignof(uint16_t) == 0);
-    ecs.addComponent(e0, Aligned{});
+    ecs.addComponent(e0, Aligned{123.f});
     REQUIRE(
         ((uintptr_t)&ecs.getComponent<uint16_t>(e0)) % alignof(uint16_t) == 0);
     REQUIRE(
         ((uintptr_t)&ecs.getComponent<Aligned>(e0)) % alignof(Aligned) == 0);
+    ecs.addComponent(e1, (uint16_t)2);
+    ecs.addComponent(e1, Aligned{456.f});
+    REQUIRE(ecs.getComponent<uint16_t>(e0) == 1);
+    REQUIRE(ecs.getComponent<uint16_t>(e1) == 2);
+    REQUIRE(ecs.getComponent<Aligned>(e0).x == 123.f);
+    REQUIRE(ecs.getComponent<Aligned>(e1).x == 456.f);
     ecs.removeComponent<uint16_t>(e0);
     ecs.removeComponent<Aligned>(e0);
 
