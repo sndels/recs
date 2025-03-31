@@ -101,11 +101,12 @@ class ComponentStorage
 struct EntitiesChunk
 {
     static constexpr size_t s_max_entities = 128;
+    // Cache line alignment on most architectures
+    static constexpr std::align_val_t s_base_alignment{128};
     using IndexT = uint8_t;
     static_assert(s_max_entities <= static_cast<IndexT>(0xFFFF'FFFF'FFFF'FFFF));
 
     ComponentMask m_mask;
-    std::align_val_t m_first_component_alignment{0};
     size_t *m_component_offsets{nullptr};
     // Storage for all components that are in m_mask. Each component type is
     // stored in a separate block, ordered according to the component bits.

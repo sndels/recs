@@ -153,8 +153,9 @@ EntitiesChunk::EntitiesChunk(ComponentMask const &mask)
         if (mask.test(i))
         {
             std::align_val_t const alignment = g_component_alignments[i];
-            if (m_first_component_alignment == std::align_val_t{0})
-                m_first_component_alignment = alignment;
+            // We assume that we can pre-align offsets without knowing the
+            // actual address we get
+            assert(alignment <= s_base_alignment);
             offset = aligned_offset(offset, alignment);
 
             m_component_offsets[offset_i++] = offset;
@@ -162,7 +163,7 @@ EntitiesChunk::EntitiesChunk(ComponentMask const &mask)
         }
     }
 
-    m_data = new (m_first_component_alignment) uint8_t[offset];
+    m_data = new (s_base_alignment) uint8_t[offset];
 
     m_index_freelist.reserve(s_max_entities);
     static_assert(s_max_entities - 1 < 0xFFFF'FFFF);
@@ -177,7 +178,7 @@ EntitiesChunk::EntitiesChunk(ComponentMask const &mask)
 EntitiesChunk::~EntitiesChunk()
 {
     delete[] m_component_offsets;
-    operator delete[](m_data, m_first_component_alignment);
+    operator delete[](m_data, s_base_alignment);
 }
 
 EntitiesChunk::EntitiesChunk(EntitiesChunk &&other) noexcept
