@@ -153,32 +153,31 @@ EntitiesChunk::EntitiesChunk(ComponentMask const &mask)
     bool non_zero_sized_component_found = false;
     for (size_t i = 0; i < TypeId::s_max_component_type_count; ++i)
     {
-        if (mask.test(i))
+        if (!mask.test(i))
+            continue;
+
+        // TODO:
+        // Only go through components that are not empty tags?
+        size_t const component_size = g_component_sizes[i];
+        if (component_size == 0)
         {
-            // TODO:
-            // Only go through components that are not empty tags?
             m_component_offsets[offset_i++] = offset;
-            size_t const component_size = g_component_sizes[i];
-            if (component_size == 0)
-            {
-                m_component_offsets[offset_i++] = offset;
-                continue;
-            }
+            continue;
+        }
 
-            std::align_val_t const alignment = g_component_alignments[i];
-            // We assume that we can pre-align offsets without knowing the
-            // actual address we get
-            assert(alignment <= s_base_alignment);
-            offset = aligned_offset(offset, alignment);
+        std::align_val_t const alignment = g_component_alignments[i];
+        // We assume that we can pre-align offsets without knowing the
+        // actual address we get
+        assert(alignment <= s_base_alignment);
+        offset = aligned_offset(offset, alignment);
 
-            m_component_offsets[offset_i++] = offset;
-            offset += component_size * s_max_entities;
-            offset += offset % sizeof(std::max_align_t);
-            if (!non_zero_sized_component_found)
-            {
-                m_first_component_size = component_size;
-                non_zero_sized_component_found = true;
-            }
+        m_component_offsets[offset_i++] = offset;
+        offset += component_size * s_max_entities;
+        offset += offset % sizeof(std::max_align_t);
+        if (!non_zero_sized_component_found)
+        {
+            m_first_component_size = component_size;
+            non_zero_sized_component_found = true;
         }
     }
     assert(non_zero_sized_component_found);
@@ -317,12 +316,14 @@ ChunkEntityRef ComponentMaskEntities::allocate(EntityId id)
     assert(tag->skip_forward == 1);
     if (tag->skip_backward > 1)
     {
-        HoleTag *front_tag =
-            chunk.holeTag(entity_index - tag->skip_backward + 1);
+        EntitiesChunk::IndexT const front_index =
+            entity_index - tag->skip_backward + 1;
+        HoleTag *front_tag = chunk.holeTag(front_index);
         front_tag->skip_forward--;
         if (tag->skip_backward > 2)
         {
-            HoleTag *tail_tag = chunk.holeTag(entity_index - 1);
+            EntitiesChunk::IndexT const tail_index = entity_index - 1;
+            HoleTag *tail_tag = chunk.holeTag(tail_index);
             tail_tag->skip_forward = 1;
             tail_tag->skip_backward = tag->skip_backward - 1;
         }
@@ -380,45 +381,55 @@ void ComponentMaskEntities::destroy(EntityId id)
 
     // Update hole tags
     HoleTag *tag = ref.chunk->holeTag(ref.entity_index);
+    tag->skip_forward = 1;
+    tag->skip_backward = 1;
+
     HoleTag *front_tag = tag;
+    EntitiesChunk::IndexT front_index = ref.entity_index;
     if (ref.entity_index > 0)
     {
-        EntityId prev_id = ref.chunk->m_ids[ref.entity_index - 1];
+        front_index = ref.entity_index - 1;
+        EntityId prev_id = ref.chunk->m_ids[front_index];
         if (prev_id == EntityId{})
         {
-            front_tag = ref.chunk->holeTag(ref.entity_index - 1);
+            front_tag = ref.chunk->holeTag(front_index);
             assert(front_tag->skip_forward == 1);
             if (front_tag->skip_backward > 1)
-                front_tag = ref.chunk->holeTag(
-                    ref.entity_index - front_tag->skip_backward + 1);
+            {
+                front_index = front_index - front_tag->skip_backward + 1;
+                front_tag = ref.chunk->holeTag(front_index);
+                assert(front_tag->skip_backward == 1);
+            }
         }
     }
 
     HoleTag *tail_tag = tag;
+    EntitiesChunk::IndexT tail_index = ref.entity_index;
     if (ref.entity_index < EntitiesChunk::s_max_entities - 1)
     {
-        EntityId next_id = ref.chunk->m_ids[ref.entity_index + 1];
+        tail_index = ref.entity_index + 1;
+        EntityId next_id = ref.chunk->m_ids[tail_index];
         if (next_id == EntityId{})
         {
-            tail_tag = ref.chunk->holeTag(ref.entity_index + 1);
+            tail_tag = ref.chunk->holeTag(tail_index);
             assert(tail_tag->skip_backward == 1);
             if (tail_tag->skip_forward > 1)
-                tail_tag = ref.chunk->holeTag(
-                    ref.entity_index + front_tag->skip_forward - 1);
+            {
+                tail_index = tail_index + tail_tag->skip_forward - 1;
+                tail_tag = ref.chunk->holeTag(tail_index);
+                assert(tail_tag->skip_forward == 1);
+            }
         }
     }
 
     if (front_tag != tail_tag)
     {
-        uint8_t const hole_size = (tail_tag - front_tag) + 1;
+        assert(front_tag < tail_tag);
+        assert(front_tag->skip_backward != 0);
+        assert(tail_tag->skip_forward != 0);
+        uint8_t const hole_size = (tail_index - front_index) + 1;
         front_tag->skip_forward = hole_size;
         tail_tag->skip_backward = hole_size;
-    }
-    else
-    {
-        assert(tag == front_tag);
-        tag->skip_forward = 1;
-        tag->skip_backward = 1;
     }
 }
 
