@@ -179,12 +179,18 @@ QueryIterator<ReadAccesses, WriteAccesses, WithAccesses>::QueryIterator(
 , m_chunk_index{chunk_index}
 , m_entity_index{entity_index}
 {
-    if (m_chunk_index < range.m_chunks.size())
-    {
-        EntitiesChunk const *chunk = m_range.m_chunks[m_chunk_index];
-        if (chunk->m_ids[m_entity_index] == EntityId{})
-            ++(*this);
-    }
+    if (m_chunk_index >= range.m_chunks.size())
+        return;
+
+    EntitiesChunk const *chunk = m_range.m_chunks[m_chunk_index];
+    EntityId const id = chunk->m_ids[m_entity_index];
+    if (id == EntityId{})
+        ++(*this);
+    else
+        m_current_entity = EntityType{ChunkEntityRef{
+            .chunk = m_range.m_chunks[m_chunk_index],
+            .entity_index = m_entity_index,
+        }};
 }
 
 template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
