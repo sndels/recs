@@ -182,11 +182,36 @@ QueryIterator<ReadAccesses, WriteAccesses, WithAccesses>::QueryIterator(
     if (m_chunk_index >= range.m_chunks.size())
         return;
 
+    size_t const chunk_count = m_range.m_chunks.size();
     EntitiesChunk const *chunk = m_range.m_chunks[m_chunk_index];
     EntityId const id = chunk->m_ids[m_entity_index];
     if (id == EntityId{})
-        ++(*this);
-    else
+    {
+        while (m_chunk_index < chunk_count)
+        {
+            if (m_entity_index == EntitiesChunk::s_max_entities)
+            {
+                m_entity_index = 0;
+                m_chunk_index++;
+                if (m_chunk_index == chunk_count)
+                    break;
+            }
+            EntitiesChunk const *chunk = m_range.m_chunks[m_chunk_index];
+            if (chunk->m_ids[m_entity_index] != EntityId{})
+                break;
+            HoleTag const *tag = chunk->holeTag(m_entity_index);
+            assert(tag->skip_backward == 1);
+            m_entity_index += tag->skip_forward;
+            assert(m_entity_index <= EntitiesChunk::s_max_entities);
+            if (m_entity_index == EntitiesChunk::s_max_entities)
+            {
+                m_entity_index = 0;
+                m_chunk_index++;
+            }
+        }
+    }
+
+    if (m_chunk_index < chunk_count)
         m_current_entity = EntityType{ChunkEntityRef{
             .chunk = m_range.m_chunks[m_chunk_index],
             .entity_index = m_entity_index,
@@ -205,12 +230,21 @@ QueryIterator<ReadAccesses, WriteAccesses, WithAccesses> &QueryIterator<
         {
             m_entity_index = 0;
             m_chunk_index++;
+            if (m_chunk_index == chunk_count)
+                break;
         }
-        if (m_chunk_index == chunk_count)
-            break;
         EntitiesChunk const *chunk = m_range.m_chunks[m_chunk_index];
         if (chunk->m_ids[m_entity_index] != EntityId{})
             break;
+        HoleTag const *tag = chunk->holeTag(m_entity_index);
+        assert(tag->skip_backward == 1);
+        m_entity_index += tag->skip_forward;
+        assert(m_entity_index <= EntitiesChunk::s_max_entities);
+        if (m_entity_index == EntitiesChunk::s_max_entities)
+        {
+            m_entity_index = 0;
+            m_chunk_index++;
+        }
     }
     if (m_chunk_index < chunk_count)
         m_current_entity = EntityType{ChunkEntityRef{
