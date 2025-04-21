@@ -146,7 +146,7 @@ struct EntitiesChunk
         requires(ValidComponent<T> && !std::is_empty_v<T>)
     [[nodiscard]] T &getComponent(IndexT index);
     void *componentData(uint64_t type_index, IndexT entity_index) const;
-    HoleTag *holeTag(IndexT index);
+    HoleTag *holeTag(IndexT index) const;
 };
 
 struct ChunkEntityRef

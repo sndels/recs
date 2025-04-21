@@ -255,7 +255,7 @@ void *EntitiesChunk::componentData(
     return ret;
 }
 
-HoleTag *EntitiesChunk::holeTag(IndexT index)
+HoleTag *EntitiesChunk::holeTag(IndexT index) const
 {
     size_t const offset = index * m_first_component_size;
     return reinterpret_cast<HoleTag *>(m_data + offset);
