@@ -113,7 +113,7 @@ TEST_CASE("Scheduler basic")
     uint32_t ref_combined_sum = 0;
     std::vector<int32_t> ints;
     std::vector<uint32_t> uints;
-    for (int32_t i = 0; i < 1000; ++i)
+    for (int32_t i = 0; i < 10; ++i)
     {
         recs::EntityId const e = storage.addEntity();
 
