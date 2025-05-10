@@ -2,7 +2,6 @@
 
 #include "access.hpp"
 #include "component_storage.hpp"
-#include <functional>
 #include <type_traits>
 #include <unordered_set>
 
@@ -36,7 +35,49 @@ class SystemRef
     size_t m_index{0};
 };
 
-using SystemFunc = std::function<void(ComponentStorage &)>;
+struct SystemFunc
+{
+    void (*func_base)(SystemFunc const &, ComponentStorage &){nullptr};
+    uintptr_t system_fn_ptr{0};
+
+    template <typename EntityReads, typename EntityWrites, typename EntityWiths>
+    static void funcBaseImplE(SystemFunc const &sys, ComponentStorage &cs)
+    {
+        using EntityT = Entity<EntityReads, EntityWrites, EntityWiths>;
+
+        void (*system)(EntityT) =
+            reinterpret_cast<void (*)(EntityT)>(sys.system_fn_ptr);
+
+        ComponentMask const access_mask = EntityT::accessMask();
+        Query<EntityReads, EntityWrites, EntityWiths> const entities_query{
+            cs.getEntities(access_mask)};
+
+        for (EntityT entity : entities_query)
+            system(entity);
+    }
+
+    template <
+        typename EntityReads, typename EntityWrites, typename EntityWiths,
+        typename QueryReads, typename QueryWrites, typename QueryWiths>
+    static void funcBaseImplEQ(SystemFunc const &sys, ComponentStorage &cs)
+    {
+        using EntityT = Entity<EntityReads, EntityWrites, EntityWiths>;
+        using QueryT = Query<QueryReads, QueryWrites, QueryWiths>;
+
+        void (*system)(EntityT, QueryT const &) =
+            reinterpret_cast<void (*)(EntityT, QueryT const &)>(
+                sys.system_fn_ptr);
+
+        ComponentMask const query_access_mask = QueryT::accessMask();
+        QueryT const query{cs.getEntities(query_access_mask)};
+
+        ComponentMask const access_mask = EntityT::accessMask();
+        Query<EntityReads, EntityWrites, EntityWiths> const entities_query{
+            cs.getEntities(access_mask)};
+        for (EntityT entity : entities_query)
+            system(entity, query);
+    }
+};
 
 class Schedule
 {
@@ -86,7 +127,7 @@ class Scheduler
 
     friend class SystemRef;
 
-  private:
+  protected:
     struct System
     {
         SystemFunc func;
@@ -94,6 +135,7 @@ class Scheduler
         std::vector<SystemRef> dependents;
     };
 
+  private:
     [[nodiscard]] bool dependsOn(
         SystemRef dependent, SystemRef dependency) const;
 
@@ -107,20 +149,14 @@ template <typename EntityReads, typename EntityWrites, typename EntityWiths>
 SystemRef Scheduler::registerSystem(
     void (*system)(Entity<EntityReads, EntityWrites, EntityWiths>))
 {
-    using EntityT = Entity<EntityReads, EntityWrites, EntityWiths>;
-
-    ComponentMask const access_mask = EntityT::accessMask();
-    ComponentMask const write_access_mask = EntityT::writeAccessMask();
-
+    static_assert(sizeof(SystemFunc::system_fn_ptr) == sizeof(system));
     System const s{
         .func =
-            [system, access_mask](ComponentStorage &cs)
-        {
-            Query<EntityReads, EntityWrites, EntityWiths> const entities_query{
-                cs.getEntities(access_mask)};
-            for (EntityT entity : entities_query)
-                system(entity);
-        },
+            SystemFunc{
+                .func_base = &SystemFunc::funcBaseImplE<
+                    EntityReads, EntityWrites, EntityWiths>,
+                .system_fn_ptr = reinterpret_cast<uintptr_t>(system),
+            },
     };
 
     SystemRef const ref{*this, m_systems.size()};
@@ -139,25 +175,15 @@ SystemRef Scheduler::registerSystem(void (*system)(
     Entity<EntityReads, EntityWrites, EntityWiths>,
     Query<QueryReads, QueryWrites, QueryWiths> const &))
 {
-    using EntityT = Entity<EntityReads, EntityWrites, EntityWiths>;
-    using QueryT = Query<QueryReads, QueryWrites, QueryWiths>;
-
-    ComponentMask const access_mask = EntityT::accessMask();
-    ComponentMask const write_access_mask = EntityT::writeAccessMask();
-    ComponentMask const query_access_mask = QueryT::accessMask();
-    ComponentMask const query_write_access_mask = QueryT::writeAccessMask();
-
+    static_assert(sizeof(SystemFunc::system_fn_ptr) == sizeof(system));
     System const s{
         .func =
-            [system, access_mask, query_access_mask](ComponentStorage &cs)
-        {
-            QueryT const query{cs.getEntities(query_access_mask)};
-
-            Query<EntityReads, EntityWrites, EntityWiths> const entities_query{
-                cs.getEntities(access_mask)};
-            for (EntityT entity : entities_query)
-                system(entity, query);
-        },
+            SystemFunc{
+                .func_base = &SystemFunc::funcBaseImplEQ<
+                    EntityReads, EntityWrites, EntityWiths, QueryReads,
+                    QueryWrites, QueryWiths>,
+                .system_fn_ptr = reinterpret_cast<uintptr_t>(system),
+            },
     };
 
     SystemRef const ref{*this, m_systems.size()};

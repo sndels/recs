@@ -48,8 +48,8 @@ Schedule::Schedule(std::vector<SystemFunc> &&systems)
 
 void Schedule::execute(ComponentStorage &cs) const
 {
-    for (SystemFunc const &fn : m_systems)
-        fn(cs);
+    for (SystemFunc const &system : m_systems)
+        system.func_base(system, cs);
 }
 
 Schedule Scheduler::buildSchedule()
