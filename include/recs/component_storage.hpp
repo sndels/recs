@@ -120,7 +120,7 @@ struct EntitiesChunk
     // max-1 must fit hole tag fields
     static constexpr size_t s_max_entities = 128;
     // Cache line alignment on most architectures
-    static constexpr std::align_val_t s_base_alignment{128};
+    static constexpr size_t s_base_alignment{128};
     using IndexT = uint8_t;
     static_assert(s_max_entities <= static_cast<IndexT>(0xFFFF'FFFF'FFFF'FFFF));
 
@@ -129,6 +129,9 @@ struct EntitiesChunk
     size_t *m_component_offsets{nullptr};
     // Storage for all components that are in m_mask. Each component type is
     // stored in a separate block, ordered according to the component bits.
+    // m_data_unaligned owns the memory, m_data is aligned from it by
+    // s_base_alignment
+    uint8_t *m_data_unaligned{nullptr};
     uint8_t *m_data{nullptr};
     std::array<EntityId, s_max_entities> m_ids;
     std::vector<IndexT> m_index_freelist;
