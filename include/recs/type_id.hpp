@@ -26,8 +26,7 @@ class TypeId
 };
 
 extern size_t g_component_sizes[TypeId::s_max_component_type_count];
-extern std::align_val_t
-    g_component_alignments[TypeId::s_max_component_type_count];
+extern size_t g_component_alignments[TypeId::s_max_component_type_count];
 
 template <typename T> uint64_t TypeId::get()
 {
@@ -38,7 +37,7 @@ template <typename T> uint64_t TypeId::get()
     {
         uint64_t const _id = runningTypeId();
         g_component_sizes[_id] = std::is_empty_v<T> ? 0 : sizeof(T);
-        g_component_alignments[_id] = std::align_val_t{alignof(T)};
+        g_component_alignments[_id] = alignof(T);
         return _id;
     }();
     return id;

@@ -5,14 +5,13 @@
 
 namespace
 {
-size_t aligned_offset(size_t offset, std::align_val_t alignment)
+size_t aligned_offset(size_t offset, size_t alignment)
 {
-    size_t const al = static_cast<size_t>(alignment);
-    assert(std::has_single_bit(al));
+    assert(std::has_single_bit(alignment));
     // TODO:
     // Get rid of this branch?
-    if ((offset & (al - 1)) != 0)
-        offset += al - (offset & (al - 1));
+    if ((offset & (alignment - 1)) != 0)
+        offset += alignment - (offset & (alignment - 1));
     return offset;
 }
 
@@ -161,7 +160,7 @@ EntitiesChunk::EntitiesChunk(ComponentMask const &mask)
                 continue;
             }
 
-            std::align_val_t const alignment = g_component_alignments[i];
+            size_t const alignment = g_component_alignments[i];
             // We assume that we can pre-align offsets without knowing the
             // actual address we get
             assert(alignment <= s_base_alignment);
@@ -172,7 +171,14 @@ EntitiesChunk::EntitiesChunk(ComponentMask const &mask)
         }
     }
 
-    m_data = new (s_base_alignment) uint8_t[offset];
+    size_t aligned_size = offset + s_base_alignment;
+    m_data_unaligned = new uint8_t[aligned_size];
+
+    void *data_ptr = m_data_unaligned;
+    if (std::align(s_base_alignment, offset, data_ptr, aligned_size) != nullptr)
+        m_data = static_cast<uint8_t *>(data_ptr);
+    else
+        assert(!"align failed");
 
     m_index_freelist.reserve(s_max_entities);
     static_assert(s_max_entities - 1 < 0xFFFF'FFFF);
@@ -187,18 +193,20 @@ EntitiesChunk::EntitiesChunk(ComponentMask const &mask)
 EntitiesChunk::~EntitiesChunk()
 {
     delete[] m_component_offsets;
-    operator delete[](m_data, s_base_alignment);
+    delete[] m_data_unaligned;
 }
 
 EntitiesChunk::EntitiesChunk(EntitiesChunk &&other) noexcept
 : m_mask{other.m_mask}
 , m_component_offsets{other.m_component_offsets}
+, m_data_unaligned{other.m_data_unaligned}
 , m_data{other.m_data}
 , m_ids{other.m_ids}
 , m_index_freelist{std::move(other.m_index_freelist)}
 , m_type_ids{std::move(other.m_type_ids)}
 {
     other.m_component_offsets = nullptr;
+    other.m_data_unaligned = nullptr;
     other.m_data = nullptr;
 }
 
@@ -208,12 +216,14 @@ EntitiesChunk &EntitiesChunk::operator=(EntitiesChunk &&other) noexcept
     {
         m_mask = other.m_mask;
         m_component_offsets = other.m_component_offsets;
+        m_data_unaligned = other.m_data_unaligned;
         m_data = other.m_data;
         m_ids = other.m_ids;
         m_index_freelist = std::move(other.m_index_freelist);
         m_type_ids = std::move(other.m_type_ids);
 
         other.m_component_offsets = nullptr;
+        other.m_data_unaligned = nullptr;
         other.m_data = nullptr;
     }
     return *this;
