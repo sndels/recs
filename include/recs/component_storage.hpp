@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <map>
 #include <stdexcept>
 #include <unordered_map>
 #include <vector>
@@ -92,7 +93,8 @@ class ComponentStorage
         requires ValidComponent<T>
     ChunkEntityRef addComponentInternal(EntityId id);
 
-    std::unordered_map<ComponentMask, ComponentMaskEntities> m_storage;
+    // Map instead of unordered_map because we cache iterators into this
+    std::map<ComponentMask, ComponentMaskEntities> m_storage;
     std::unordered_map<
         ComponentMask, std::vector<decltype(m_storage)::iterator>>
         m_mask_entitites;

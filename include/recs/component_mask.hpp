@@ -34,6 +34,8 @@ class ComponentMask
         ComponentMask const &other) const;
     [[nodiscard]] RECS_FORCEINLINE bool operator!=(
         ComponentMask const &other) const;
+    [[nodiscard]] RECS_FORCEINLINE bool operator<(
+        ComponentMask const &other) const;
 
     [[nodiscard]] RECS_FORCEINLINE std::vector<uint64_t> typeIds() const;
 
@@ -113,6 +115,16 @@ RECS_FORCEINLINE bool ComponentMask::operator!=(
             return true;
     }
     return false;
+}
+RECS_FORCEINLINE bool ComponentMask::operator<(ComponentMask const &other) const
+{
+
+    for (uint64_t i = 0; i < s_block_count - 1; ++i)
+    {
+        if (m_blocks[i] < other.m_blocks[i])
+            return true;
+    }
+    return m_blocks[s_block_count - 1] < other.m_blocks[s_block_count - 1];
 }
 
 RECS_FORCEINLINE std::vector<uint64_t> ComponentMask::typeIds() const
