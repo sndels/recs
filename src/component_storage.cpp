@@ -257,6 +257,7 @@ void *EntitiesChunk::componentData(
 
 HoleTag *EntitiesChunk::holeTag(IndexT index) const
 {
+    assert(index < s_max_entities);
     size_t const offset = index * m_first_component_size;
     return reinterpret_cast<HoleTag *>(m_data + offset);
 }

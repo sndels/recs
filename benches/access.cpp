@@ -49,12 +49,12 @@ struct HeterogeneousEntitiesFixture : public celero::TestFixture
         {
             recs::EntityId id = cs.addEntity();
             cs.addComponent(id, rand());
-            cs.addComponent(id, (uint8_t)0);
+            cs.addComponent(id, (uint16_t)0);
             ids.push_back(id);
 
             id = cs.addEntity();
             cs.addComponent(id, rand());
-            cs.addComponent(id, (uint16_t)0);
+            cs.addComponent(id, (uint32_t)0);
             ids.push_back(id);
         }
     }
@@ -112,20 +112,20 @@ struct HeterogeneousEntitiesEveryOtherMissingFixture
         {
             recs::EntityId id = cs.addEntity();
             cs.addComponent(id, rand());
-            cs.addComponent(id, (uint8_t)0);
+            cs.addComponent(id, (uint16_t)0);
             ids.push_back(id);
             id = cs.addEntity();
             cs.addComponent(id, rand());
-            cs.addComponent(id, (uint8_t)0);
+            cs.addComponent(id, (uint16_t)0);
             tmp.push_back(id);
 
             id = cs.addEntity();
             cs.addComponent(id, rand());
-            cs.addComponent(id, (uint16_t)0);
+            cs.addComponent(id, (uint32_t)0);
             ids.push_back(id);
             id = cs.addEntity();
             cs.addComponent(id, rand());
-            cs.addComponent(id, (uint16_t)0);
+            cs.addComponent(id, (uint32_t)0);
             tmp.push_back(id);
         }
 
@@ -186,31 +186,31 @@ struct HeterogeneousEntitiesBadHoleFixture : public celero::TestFixture
         std::vector<recs::EntityId> tmp;
         recs::EntityId id = cs.addEntity();
         cs.addComponent(id, rand());
-        cs.addComponent(id, (uint8_t)0);
+        cs.addComponent(id, (uint16_t)0);
         ids.push_back(id);
         id = cs.addEntity();
         cs.addComponent(id, rand());
-        cs.addComponent(id, (uint16_t)0);
+        cs.addComponent(id, (uint32_t)0);
         ids.push_back(id);
         for (size_t i = 0; i < (recs::EntitiesChunk::s_max_entities / 2) - 2;
              ++i)
         {
             id = cs.addEntity();
             cs.addComponent(id, rand());
-            cs.addComponent(id, (uint8_t)0);
+            cs.addComponent(id, (uint16_t)0);
             tmp.push_back(id);
             id = cs.addEntity();
             cs.addComponent(id, rand());
-            cs.addComponent(id, (uint16_t)0);
+            cs.addComponent(id, (uint32_t)0);
             tmp.push_back(id);
         }
         id = cs.addEntity();
         cs.addComponent(id, rand());
-        cs.addComponent(id, (uint8_t)0);
+        cs.addComponent(id, (uint16_t)0);
         ids.push_back(id);
         id = cs.addEntity();
         cs.addComponent(id, rand());
-        cs.addComponent(id, (uint16_t)0);
+        cs.addComponent(id, (uint32_t)0);
         ids.push_back(id);
 
         for (recs::EntityId id : tmp)
