@@ -275,7 +275,14 @@ HoleTag *EntitiesChunk::holeTag(IndexT index) const
 
 bool ChunkEntityRef::isValid() const
 {
-    return chunk != nullptr && entity_index < EntitiesChunk::s_max_entities;
+    if (chunk == nullptr)
+        return false;
+    if (entity_index >= EntitiesChunk::s_max_entities)
+        return false;
+    if (chunk->m_ids[entity_index] == EntityId{})
+        return false;
+
+    return true;
 }
 
 void ChunkEntityRef::reset()
