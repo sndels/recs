@@ -19,8 +19,8 @@
   },
   {
     "label": "MSbuild and run tests (Debug)",
-    "command": "./scripts/msbuild.bat Debug",
-    "args": ["Debug"],
+    "command": "./scripts/msbuild.bat",
+    "args": ["Debug", "test"],
     "use_new_terminal": false,
     "allow_concurrent_runs": false,
     "reveal": "always",
@@ -41,6 +41,16 @@
     "label": "Ninja build and run tests (Release)",
     "command": "./scripts/ninja_run.sh",
     "args": ["Release", "test"],
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always",
+    "hide": "never",
+    "shell": "system"
+  },
+  {
+    "label": "MSbuild and run bench (Debug)",
+    "command": "./scripts/msbuild.bat",
+    "args": ["Debug", "bench"],
     "use_new_terminal": false,
     "allow_concurrent_runs": false,
     "reveal": "always",

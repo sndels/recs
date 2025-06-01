@@ -8,9 +8,9 @@ msbuild^
  /t:build^
  /consoleloggerparameters:NoSummary^
  /property:Configuration=%1^
- test.vcxproj || goto :error
+ %2.vcxproj || goto :error
 
-.\Debug\test.exe || goto :error
+.\Debug\%2.exe || goto :error
 
 popd
 goto :EOF
