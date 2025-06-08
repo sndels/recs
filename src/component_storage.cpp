@@ -417,17 +417,18 @@ void ComponentMaskEntities::destroy(EntityId id)
     EntitiesChunk::IndexT front_index = ref.entity_index;
     if (ref.entity_index > 0)
     {
-        front_index = ref.entity_index - 1;
-        EntityId prev_id = ref.chunk->m_ids[front_index];
+        EntitiesChunk::IndexT const prev_index = ref.entity_index - 1;
+        EntityId prev_id = ref.chunk->m_ids[prev_index];
         if (prev_id == EntityId{})
         {
+            front_index = prev_index;
             front_tag = ref.chunk->holeTag(front_index);
             assert(front_tag->skip_forward == 1);
             if (front_tag->skip_backward > 1)
             {
                 assert(front_index < EntitiesChunk::s_max_entities);
                 assert(front_index >= front_tag->skip_backward - 1);
-                front_index = front_index - (front_tag->skip_backward - 1);
+                front_index -= front_tag->skip_backward - 1;
                 front_tag = ref.chunk->holeTag(front_index);
                 assert(front_tag->skip_backward == 1);
             }
@@ -451,7 +452,7 @@ void ComponentMaskEntities::destroy(EntityId id)
                 assert(
                     EntitiesChunk::s_max_entities - tail_index >=
                     tail_tag->skip_forward - 1);
-                tail_index = tail_index + tail_tag->skip_forward - 1;
+                tail_index += tail_tag->skip_forward - 1;
                 tail_tag = ref.chunk->holeTag(tail_index);
                 assert(tail_tag->skip_forward == 1);
             }
