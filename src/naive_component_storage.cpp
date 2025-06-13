@@ -64,7 +64,7 @@ EntityId ComponentStorage::addEntity()
 
 bool ComponentStorage::isValid(EntityId id) const
 {
-    if (!id.isValid())
+    if (id.isEmpty())
         return false;
 
     uint64_t const index = id.index();

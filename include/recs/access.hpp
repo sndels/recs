@@ -50,9 +50,11 @@ class Entity
         return mask;
     }
 
+    friend class QueryIterator<ReadAccesses, WriteAccesses, WithAccesses>;
+
     // TODO:
     // Support structured bindings into components?
-  private:
+  protected:
     ChunkEntityRef m_chunk_ref;
 };
 
@@ -73,7 +75,7 @@ class QueryIterator
     QueryIterator &operator=(QueryIterator &&) = delete;
 
     QueryIterator &operator++();
-    [[nodiscard]] EntityType operator*() const;
+    [[nodiscard]] EntityType &operator*();
     [[nodiscard]] EntityType const *operator->() const;
     [[nodiscard]] bool operator!=(QueryIterator const &other) const;
     [[nodiscard]] bool operator==(QueryIterator const &other) const;
@@ -87,8 +89,7 @@ class QueryIterator
     QueryIterator() = default;
 
     ComponentStorage::Range const &m_range;
-    size_t m_chunk_index{0};
-    EntitiesChunk::IndexT m_entity_index{0};
+    size_t m_chunk_index{(size_t)-1};
     EntityType m_current_entity;
 };
 
@@ -177,68 +178,71 @@ QueryIterator<ReadAccesses, WriteAccesses, WithAccesses>::QueryIterator(
     EntitiesChunk::IndexT entity_index)
 : m_range{range}
 , m_chunk_index{chunk_index}
-, m_entity_index{entity_index}
 {
+    ChunkEntityRef &chunk_ref = m_current_entity.m_chunk_ref;
+    chunk_ref.entity_index = entity_index;
     size_t const chunk_count = m_range.m_chunks.size();
-    if (m_chunk_index >= chunk_count)
+    if (chunk_index >= chunk_count)
         return;
+    chunk_ref.chunk = m_range.m_chunks[m_chunk_index];
 
-    assert(m_entity_index < EntitiesChunk::s_max_entities);
+    assert(chunk_ref.entity_index < EntitiesChunk::s_max_entities);
     while (m_chunk_index < chunk_count)
     {
-        EntitiesChunk const *chunk = m_range.m_chunks[m_chunk_index];
-        if (chunk->m_ids[m_entity_index] != EntityId{})
+        if (!chunk_ref.chunk->m_ids[chunk_ref.entity_index].isEmpty())
             break;
-        HoleTag const *tag = chunk->holeTag(m_entity_index);
+        HoleTag const *tag = chunk_ref.chunk->holeTag(chunk_ref.entity_index);
         assert(tag->skip_backward == 1);
-        m_entity_index += tag->skip_forward;
-        if (m_entity_index >= EntitiesChunk::s_max_entities)
+        chunk_ref.entity_index += tag->skip_forward;
+        if (chunk_ref.entity_index >= EntitiesChunk::s_max_entities)
         {
-            m_entity_index = 0;
+            chunk_ref.entity_index = 0;
             m_chunk_index++;
+            if (m_chunk_index == chunk_count)
+            {
+                chunk_ref.chunk = nullptr;
+                break;
+            }
+            chunk_ref.chunk = m_range.m_chunks[m_chunk_index];
         }
     }
-
-    if (m_chunk_index < chunk_count)
-        m_current_entity = EntityType{ChunkEntityRef{
-            .chunk = m_range.m_chunks[m_chunk_index],
-            .entity_index = m_entity_index,
-        }};
 }
 
 template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
 QueryIterator<ReadAccesses, WriteAccesses, WithAccesses> &QueryIterator<
     ReadAccesses, WriteAccesses, WithAccesses>::operator++()
 {
-    m_entity_index++;
     size_t const chunk_count = m_range.m_chunks.size();
+    if (m_chunk_index >= chunk_count)
+        return *this;
+
+    ChunkEntityRef &chunk_ref = m_current_entity.m_chunk_ref;
+    chunk_ref.entity_index++;
     while (m_chunk_index < chunk_count)
     {
-        if (m_entity_index >= EntitiesChunk::s_max_entities)
+        if (chunk_ref.entity_index >= EntitiesChunk::s_max_entities)
         {
-            m_entity_index = 0;
+            chunk_ref.entity_index = 0;
             m_chunk_index++;
             if (m_chunk_index == chunk_count)
+            {
+                chunk_ref.chunk = nullptr;
                 break;
+            }
+            chunk_ref.chunk = m_range.m_chunks[m_chunk_index];
         }
-        EntitiesChunk const *chunk = m_range.m_chunks[m_chunk_index];
-        if (chunk->m_ids[m_entity_index] != EntityId{})
+        if (!chunk_ref.chunk->m_ids[chunk_ref.entity_index].isEmpty())
             break;
-        HoleTag const *tag = chunk->holeTag(m_entity_index);
+        HoleTag const *tag = chunk_ref.chunk->holeTag(chunk_ref.entity_index);
         assert(tag->skip_backward == 1);
-        m_entity_index += tag->skip_forward;
+        chunk_ref.entity_index += tag->skip_forward;
     }
-    if (m_chunk_index < chunk_count)
-        m_current_entity = EntityType{ChunkEntityRef{
-            .chunk = m_range.m_chunks[m_chunk_index],
-            .entity_index = m_entity_index,
-        }};
     return *this;
 }
 
 template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
-Entity<ReadAccesses, WriteAccesses, WithAccesses> QueryIterator<
-    ReadAccesses, WriteAccesses, WithAccesses>::operator*() const
+Entity<ReadAccesses, WriteAccesses, WithAccesses> &QueryIterator<
+    ReadAccesses, WriteAccesses, WithAccesses>::operator*()
 {
     return m_current_entity;
 }
@@ -259,7 +263,8 @@ bool QueryIterator<ReadAccesses, WriteAccesses, WithAccesses>::operator==(
         "Comparing iterators to different ranges");
 
     bool const ret = m_chunk_index == other.m_chunk_index &&
-                     m_entity_index == other.m_entity_index;
+                     m_current_entity.m_chunk_ref.entity_index ==
+                         other.m_current_entity.m_chunk_ref.entity_index;
     return ret;
 }
 
@@ -272,7 +277,8 @@ bool QueryIterator<ReadAccesses, WriteAccesses, WithAccesses>::operator!=(
         "Comparing iterators to different ranges");
 
     bool const ret = m_chunk_index != other.m_chunk_index ||
-                     m_entity_index != other.m_entity_index;
+                     m_current_entity.m_chunk_ref.entity_index !=
+                         other.m_current_entity.m_chunk_ref.entity_index;
     return ret;
 }
 

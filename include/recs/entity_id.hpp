@@ -30,6 +30,11 @@ class EntityId
     EntityId(EntityId const &) noexcept = default;
     EntityId &operator=(EntityId const &) noexcept = default;
 
+    [[nodiscard]] bool isEmpty() const noexcept
+    {
+        return m_gen_id == s_empty_id;
+    }
+
     [[nodiscard]] bool operator==(EntityId other) const noexcept
     {
         return m_gen_id == other.m_gen_id;
@@ -47,7 +52,7 @@ class EntityId
     friend struct tests::EntityIdCreator;
 
   private:
-    static uint64_t const s_invalid_id = 0xFFFF'FFFF'FFFF'FFFF;
+    static uint64_t const s_empty_id = 0xFFFF'FFFF'FFFF'FFFF;
     static uint8_t const s_index_bits = 48;
     static uint64_t const s_index_mask = 0xFFFF'FFFF'FFFF;
     static uint64_t const s_max_index = s_index_mask - 1;
@@ -61,24 +66,19 @@ class EntityId
         assert(generation <= s_max_generation);
     }
 
-    [[nodiscard]] bool isValid() const noexcept
-    {
-        return m_gen_id != s_invalid_id;
-    }
-
     [[nodiscard]] uint16_t generation() const noexcept
     {
-        assert(m_gen_id != s_invalid_id);
+        assert(m_gen_id != s_empty_id);
         return m_gen_id >> s_index_bits;
     }
 
     [[nodiscard]] uint64_t index() const noexcept
     {
-        assert(m_gen_id != s_invalid_id);
+        assert(m_gen_id != s_empty_id);
         return m_gen_id & s_index_mask;
     }
 
-    uint64_t m_gen_id{s_invalid_id};
+    uint64_t m_gen_id{s_empty_id};
 };
 
 } // namespace recs

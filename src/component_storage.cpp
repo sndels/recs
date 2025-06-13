@@ -61,7 +61,7 @@ EntityId ComponentStorage::addEntity()
 
 bool ComponentStorage::isValid(EntityId id) const
 {
-    if (!id.isValid())
+    if (id.isEmpty())
         return false;
 
     uint64_t const index = id.index();
@@ -279,7 +279,7 @@ bool ChunkEntityRef::isValid() const
         return false;
     if (entity_index >= EntitiesChunk::s_max_entities)
         return false;
-    if (chunk->m_ids[entity_index] == EntityId{})
+    if (chunk->m_ids[entity_index].isEmpty())
         return false;
 
     return true;
@@ -322,7 +322,7 @@ ChunkEntityRef ComponentMaskEntities::allocate(EntityId id)
     EntitiesChunk &chunk = *m_chunks[chunk_index];
     EntitiesChunk::IndexT const entity_index = chunk.m_index_freelist.back();
     chunk.m_index_freelist.pop_back();
-    assert(chunk.m_ids[entity_index] == EntityId{});
+    assert(chunk.m_ids[entity_index].isEmpty());
     chunk.m_ids[entity_index] = id;
 
     // Update hole tags
@@ -419,7 +419,7 @@ void ComponentMaskEntities::destroy(EntityId id)
     {
         EntitiesChunk::IndexT const prev_index = ref.entity_index - 1;
         EntityId prev_id = ref.chunk->m_ids[prev_index];
-        if (prev_id == EntityId{})
+        if (prev_id.isEmpty())
         {
             front_index = prev_index;
             front_tag = ref.chunk->holeTag(front_index);
@@ -441,7 +441,7 @@ void ComponentMaskEntities::destroy(EntityId id)
     {
         EntitiesChunk::IndexT const next_index = ref.entity_index + 1;
         EntityId next_id = ref.chunk->m_ids[next_index];
-        if (next_id == EntityId{})
+        if (next_id.isEmpty())
         {
             tail_index = next_index;
             tail_tag = ref.chunk->holeTag(next_index);
