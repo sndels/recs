@@ -21,9 +21,10 @@ namespace recs
 {
 
 ComponentStorage::Range::Range(
-    ComponentStorage const &cs, std::vector<EntitiesChunk *> &&chunks)
+    ComponentStorage const &cs,
+    std::vector<EntitiesChunk::SubRange> &&subranges)
 : m_cs{cs}
-, m_chunks{std::move(chunks)}
+, m_subranges{std::move(subranges)}
 {
 }
 
@@ -95,15 +96,17 @@ ComponentStorage::Range ComponentStorage::getEntities(ComponentMask const &mask)
         m_mask_entitites.emplace(mask, iters);
     }
 
-    std::vector<EntitiesChunk *> chunks;
+    std::vector<EntitiesChunk::SubRange> subranges;
     auto &entities = m_mask_entitites[mask];
     for (auto &cme : entities)
     {
         for (EntitiesChunk *ec : cme->second.m_chunks)
-            chunks.push_back(ec);
+            std::copy(
+                ec->m_subranges.begin(), ec->m_subranges.end(),
+                std::back_inserter(subranges));
     }
 
-    return Range{*this, std::move(chunks)};
+    return Range{*this, std::move(subranges)};
 }
 
 ChunkEntityRef ComponentStorage::getEntity(EntityId id)
@@ -188,17 +191,12 @@ EntitiesChunk::EntitiesChunk(ComponentMask const &mask)
     else
         assert(!"align failed");
 
-    HoleTag *front_tag = holeTag(0);
-    front_tag->skip_forward = static_cast<uint8_t>(s_max_entities);
-    front_tag->skip_backward = 1;
-    HoleTag *tail_tag = holeTag(s_max_entities - 1);
-    tail_tag->skip_forward = 1;
-    tail_tag->skip_backward = static_cast<uint8_t>(s_max_entities);
-
     m_index_freelist.reserve(s_max_entities);
     static_assert(s_max_entities - 1 < 0xFFFF'FFFF);
     for (IndexT i = 0; i < static_cast<IndexT>(s_max_entities); ++i)
         m_index_freelist.push_back(static_cast<IndexT>(i));
+
+    m_subranges.reserve((s_max_entities - 1) / 2 + 1);
 }
 
 EntitiesChunk::~EntitiesChunk()
@@ -266,13 +264,6 @@ void *EntitiesChunk::componentData(
     return ret;
 }
 
-HoleTag *EntitiesChunk::holeTag(IndexT index) const
-{
-    assert(index < s_max_entities);
-    size_t const offset = index * m_first_component_size;
-    return reinterpret_cast<HoleTag *>(m_data + offset);
-}
-
 bool ChunkEntityRef::isValid() const
 {
     if (chunk == nullptr)
@@ -319,41 +310,72 @@ ChunkEntityRef ComponentMaskEntities::allocate(EntityId id)
     if (chunk_index == chunk_count)
         m_chunks.emplace_back(new EntitiesChunk{m_mask});
 
-    EntitiesChunk &chunk = *m_chunks[chunk_index];
-    EntitiesChunk::IndexT const entity_index = chunk.m_index_freelist.back();
-    chunk.m_index_freelist.pop_back();
-    assert(chunk.m_ids[entity_index].isEmpty());
-    chunk.m_ids[entity_index] = id;
+    EntitiesChunk *chunk = m_chunks[chunk_index];
+    EntitiesChunk::IndexT const entity_index = chunk->m_index_freelist.back();
+    chunk->m_index_freelist.pop_back();
+    assert(chunk->m_ids[entity_index].isEmpty());
+    chunk->m_ids[entity_index] = id;
 
-    // Update hole tags
-    HoleTag *tag = chunk.holeTag(entity_index);
-    // We assume this is at the end of the hole
-    assert(tag->skip_forward == 1);
-    if (tag->skip_backward > 1)
+    size_t sr_index = 0;
+    for (; sr_index < chunk->m_subranges.size(); ++sr_index)
     {
-        assert(entity_index >= tag->skip_backward - 1);
-        EntitiesChunk::IndexT const front_index =
-            entity_index - (tag->skip_backward - 1);
-        HoleTag *front_tag = chunk.holeTag(front_index);
-        assert(front_tag->skip_backward == 1);
-        front_tag->skip_forward--;
-
-        HoleTag *tail_tag = front_tag;
-        EntitiesChunk::IndexT tail_index = front_index;
-        if (tag->skip_backward > 2)
+        EntitiesChunk::SubRange &sr = chunk->m_subranges[sr_index];
+        if (entity_index < sr.first)
+            break;
+        sr_index++;
+    }
+    if (sr_index == chunk->m_subranges.size())
+    {
+        chunk->m_subranges.push_back(EntitiesChunk::SubRange{
+            .first = entity_index,
+            .last = entity_index,
+            .chunk = chunk,
+        });
+    }
+    else
+    {
+        EntitiesChunk::SubRange &sr = chunk->m_subranges[sr_index];
+        if (sr_index == 0)
         {
-            tail_index = entity_index - 1;
-            tail_tag = chunk.holeTag(tail_index);
-            tail_tag->skip_forward = 1;
-            tail_tag->skip_backward = tag->skip_backward - 1;
+            if (entity_index + 1 == sr.first)
+                sr.first = entity_index;
+            else
+                chunk->m_subranges.insert(
+                    chunk->m_subranges.begin(), EntitiesChunk::SubRange{
+                                                    .first = entity_index,
+                                                    .last = entity_index,
+                                                    .chunk = chunk,
+                                                });
         }
-
-        assert(front_tag->skip_forward == tail_tag->skip_backward);
-        assert(front_tag->skip_forward == tail_index - front_index + 1);
+        else
+        {
+            assert(entity_index > 0);
+            EntitiesChunk::SubRange &prev_sr = chunk->m_subranges[sr_index - 1];
+            if (entity_index + 1 == sr.first)
+            {
+                if (entity_index - 1 == prev_sr.last)
+                {
+                    prev_sr.last = sr.last;
+                    chunk->m_subranges.erase(
+                        chunk->m_subranges.begin() + sr_index);
+                }
+                else
+                    sr.first = entity_index;
+            }
+            else if (entity_index - 1 == prev_sr.last)
+                prev_sr.last = entity_index;
+            else
+                chunk->m_subranges.insert(
+                    chunk->m_subranges.begin(), EntitiesChunk::SubRange{
+                                                    .first = entity_index,
+                                                    .last = entity_index,
+                                                    .chunk = chunk,
+                                                });
+        }
     }
 
     return ChunkEntityRef{
-        .chunk = &chunk,
+        .chunk = chunk,
         .entity_index = entity_index,
     };
 }
@@ -408,64 +430,33 @@ void ComponentMaskEntities::destroy(EntityId id)
         ref.chunk->m_index_freelist.insert(it, ref.entity_index);
     }
 
-    // Update hole tags
-    HoleTag *tag = ref.chunk->holeTag(ref.entity_index);
-    tag->skip_forward = 1;
-    tag->skip_backward = 1;
-
-    HoleTag *front_tag = tag;
-    EntitiesChunk::IndexT front_index = ref.entity_index;
-    if (ref.entity_index > 0)
+    size_t sr_index = 0;
+    for (; sr_index < ref.chunk->m_subranges.size(); ++sr_index)
     {
-        EntitiesChunk::IndexT const prev_index = ref.entity_index - 1;
-        EntityId prev_id = ref.chunk->m_ids[prev_index];
-        if (prev_id.isEmpty())
-        {
-            front_index = prev_index;
-            front_tag = ref.chunk->holeTag(front_index);
-            assert(front_tag->skip_forward == 1);
-            if (front_tag->skip_backward > 1)
-            {
-                assert(front_index < EntitiesChunk::s_max_entities);
-                assert(front_index >= front_tag->skip_backward - 1);
-                front_index -= front_tag->skip_backward - 1;
-                front_tag = ref.chunk->holeTag(front_index);
-                assert(front_tag->skip_backward == 1);
-            }
-        }
+        EntitiesChunk::SubRange &sr = ref.chunk->m_subranges[sr_index];
+        if (ref.entity_index >= sr.first && ref.entity_index <= sr.last)
+            break;
     }
-
-    HoleTag *tail_tag = tag;
-    EntitiesChunk::IndexT tail_index = ref.entity_index;
-    if (ref.entity_index < EntitiesChunk::s_max_entities - 1)
+    assert(sr_index < ref.chunk->m_subranges.size());
+    EntitiesChunk::SubRange &sr = ref.chunk->m_subranges[sr_index];
+    assert(ref.entity_index >= sr.first && ref.entity_index <= sr.last);
+    if (sr.first == sr.last)
+        ref.chunk->m_subranges.erase(ref.chunk->m_subranges.begin() + sr_index);
+    else if (ref.entity_index == sr.first)
+        sr.first++;
+    else if (ref.entity_index == sr.last)
+        sr.last--;
+    else
     {
-        EntitiesChunk::IndexT const next_index = ref.entity_index + 1;
-        EntityId next_id = ref.chunk->m_ids[next_index];
-        if (next_id.isEmpty())
-        {
-            tail_index = next_index;
-            tail_tag = ref.chunk->holeTag(next_index);
-            assert(tail_tag->skip_backward == 1);
-            if (tail_tag->skip_forward > 1)
-            {
-                assert(tail_index < EntitiesChunk::s_max_entities);
-                assert(
-                    EntitiesChunk::s_max_entities - tail_index >=
-                    tail_tag->skip_forward - 1);
-                tail_index += tail_tag->skip_forward - 1;
-                tail_tag = ref.chunk->holeTag(tail_index);
-                assert(tail_tag->skip_forward == 1);
-            }
-        }
-    }
-
-    if (front_tag != tail_tag)
-    {
-        uint8_t const jump_length = (tail_index - front_index) + 1;
-        front_tag->skip_forward = jump_length;
-        front_tag->skip_backward = 1;
-        tail_tag->skip_forward = 1;
-        tail_tag->skip_backward = jump_length;
+        ref.chunk->m_subranges.insert(
+            ref.chunk->m_subranges.begin() + sr_index,
+            EntitiesChunk::SubRange{
+                .first = sr.first,
+                .last =
+                    static_cast<EntitiesChunk::IndexT>(ref.entity_index - 1),
+                .chunk = ref.chunk,
+            });
+        sr.first = ref.entity_index + 1;
     }
 }
 

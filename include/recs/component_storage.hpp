@@ -23,7 +23,51 @@ class Entity;
 template <typename ReadAccesses, typename WriteAccesses, typename WithAccesses>
 class QueryIterator;
 
-struct EntitiesChunk;
+struct EntitiesChunk
+{
+    // max-1 must fit hole tag fields
+    static constexpr size_t s_max_entities = 128;
+    // Cache line alignment on most architectures
+    static constexpr size_t s_base_alignment{128};
+    using IndexT = uint8_t;
+    static_assert(s_max_entities <= static_cast<IndexT>(0xFFFF'FFFF'FFFF'FFFF));
+
+    ComponentMask m_mask;
+    size_t m_first_component_size{0};
+    size_t *m_component_offsets{nullptr};
+    // Storage for all components that are in m_mask. Each component type is
+    // stored in a separate block, ordered according to the component bits.
+    // m_data_unaligned owns the memory, m_data is aligned from it by
+    // s_base_alignment
+    uint8_t *m_data_unaligned{nullptr};
+    uint8_t *m_data{nullptr};
+    std::array<EntityId, s_max_entities> m_ids;
+    std::vector<IndexT> m_index_freelist;
+    std::vector<uint64_t> m_type_ids;
+    struct SubRange
+    {
+        IndexT first{0};
+        IndexT last{0};
+        EntitiesChunk *chunk{nullptr};
+    };
+    std::vector<SubRange> m_subranges;
+
+    EntitiesChunk(ComponentMask const &mask);
+    ~EntitiesChunk();
+
+    EntitiesChunk(EntitiesChunk const &) = delete;
+    EntitiesChunk(EntitiesChunk &&other) noexcept;
+    EntitiesChunk &operator=(EntitiesChunk const &) = delete;
+    EntitiesChunk &operator=(EntitiesChunk &&other) noexcept;
+
+    [[nodiscard]] IndexT index(EntityId id) const;
+
+    template <typename T>
+        requires(ValidComponent<T> && !std::is_empty_v<T>)
+    [[nodiscard]] T &getComponent(IndexT index);
+    void *componentData(uint64_t type_index, IndexT entity_index) const;
+};
+
 struct ChunkEntityRef;
 struct ComponentMaskEntities;
 
@@ -43,10 +87,11 @@ class ComponentStorage
         Range &operator=(Range &&) = delete;
 
         Range(
-            ComponentStorage const &cs, std::vector<EntitiesChunk *> &&chunks);
+            ComponentStorage const &cs,
+            std::vector<EntitiesChunk::SubRange> &&subranges);
 
         ComponentStorage const &m_cs;
-        std::vector<EntitiesChunk *> m_chunks;
+        std::vector<EntitiesChunk::SubRange> m_subranges;
     };
 
     ComponentStorage() = default;
@@ -105,53 +150,6 @@ class ComponentStorage
     std::deque<uint64_t> m_entity_freelist;
     std::vector<ComponentMask> m_entity_component_masks;
     std::vector<ChunkEntityRef> m_entity_refs;
-};
-
-struct HoleTag
-{
-    uint16_t skip_forward : 8;
-    uint16_t skip_backward : 8;
-};
-// This matches the minimum component type size in type_id.hpp
-static_assert(sizeof(HoleTag) == 2);
-
-struct EntitiesChunk
-{
-    // max-1 must fit hole tag fields
-    static constexpr size_t s_max_entities = 128;
-    // Cache line alignment on most architectures
-    static constexpr size_t s_base_alignment{128};
-    using IndexT = uint8_t;
-    static_assert(s_max_entities <= static_cast<IndexT>(0xFFFF'FFFF'FFFF'FFFF));
-
-    ComponentMask m_mask;
-    size_t m_first_component_size{0};
-    size_t *m_component_offsets{nullptr};
-    // Storage for all components that are in m_mask. Each component type is
-    // stored in a separate block, ordered according to the component bits.
-    // m_data_unaligned owns the memory, m_data is aligned from it by
-    // s_base_alignment
-    uint8_t *m_data_unaligned{nullptr};
-    uint8_t *m_data{nullptr};
-    std::array<EntityId, s_max_entities> m_ids;
-    std::vector<IndexT> m_index_freelist;
-    std::vector<uint64_t> m_type_ids;
-
-    EntitiesChunk(ComponentMask const &mask);
-    ~EntitiesChunk();
-
-    EntitiesChunk(EntitiesChunk const &) = delete;
-    EntitiesChunk(EntitiesChunk &&other) noexcept;
-    EntitiesChunk &operator=(EntitiesChunk const &) = delete;
-    EntitiesChunk &operator=(EntitiesChunk &&other) noexcept;
-
-    [[nodiscard]] IndexT index(EntityId id) const;
-
-    template <typename T>
-        requires(ValidComponent<T> && !std::is_empty_v<T>)
-    [[nodiscard]] T &getComponent(IndexT index);
-    void *componentData(uint64_t type_index, IndexT entity_index) const;
-    HoleTag *holeTag(IndexT index) const;
 };
 
 struct ChunkEntityRef
